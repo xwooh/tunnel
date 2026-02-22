@@ -1,0 +1,56 @@
+version: 1
+
+ingress:
+  public_listen: 0.0.0.0:443
+  unknown_sni_action: reject
+
+static_site:
+  domain: example.com
+  listen_host: 127.0.0.1
+  listen_port: 9443
+  cert_file: /root/certfile/example.com/fullchain.pem
+  key_file: /root/certfile/example.com/key.pem
+  web_root: /var/www/html
+
+egress:
+  socks_proxy:
+    port: 39996
+
+reality_backends:
+  - name: Ra
+    listen_port: 8888
+    use_socks: true
+    user_uuid: aaaaaa-bbbbb-cccccc-ddddd
+    server: example.com
+    servername: sni1.example.com
+    handshake_server: sni1.example.com
+    port: 443
+    private_key: private_key_example
+    public_key: public_key_example
+    short_id: aaacccbbbddd
+  - name: Rb
+    listen_port: 7777
+    use_socks: false
+    user_uuid: aaaaaa-bbbbb-cccccc-ddddd
+    server: example.com
+    servername: sni2.example.com
+    handshake_server: sni2.example.com
+    port: 443
+    private_key: private_key_example2
+    public_key: public_key_example2
+    short_id: aaacccbbbddd
+
+trojan_backends:
+  - name: T1
+    listen_port: 6666
+    use_socks: false
+    password: password_example
+    server: example.com
+    servername: example.com
+    tls_cert_file: /root/certfile/example.com/fullchain.pem
+    tls_key_file: /root/certfile/example.com/key.pem
+    skip_cert_verify: false
+    fallback_site:
+      enabled: true
+      listen_host: 127.0.0.1
+      listen_port: 37970

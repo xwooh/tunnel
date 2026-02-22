@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Product Architecture | NebulaGrid Cloud</title>
+  <meta name="description" content="Explore NebulaGrid Cloud delivery architecture, from access and caching to security and edge compute.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700;800&family=Sora:wght@500;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --ink: #10233b;
+      --sub: #3f5573;
+      --line: rgba(16, 35, 59, 0.14);
+      --bg: #f6f9ff;
+      --card: #ffffff;
+      --primary: #0f6be8;
+      --primary-deep: #0a3d8a;
+      --accent: #ff6d43;
+      --shadow: 0 16px 36px rgba(16, 35, 59, 0.14);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      color: var(--ink);
+      font-family: "Manrope", "Segoe UI", sans-serif;
+      background:
+        radial-gradient(circle at 12% 0%, rgba(15, 107, 232, 0.18), rgba(15, 107, 232, 0) 38%),
+        radial-gradient(circle at 92% 0%, rgba(255, 109, 67, 0.18), rgba(255, 109, 67, 0) 32%),
+        linear-gradient(130deg, #ebf3ff 0%, #f8fbff 44%, #ffffff 100%);
+      min-height: 100vh;
+    }
+
+    .shell {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 24px 18px 40px;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.85);
+      backdrop-filter: blur(8px);
+      padding: 12px 14px;
+    }
+
+    .brand {
+      font-family: "Sora", "Manrope", sans-serif;
+      font-weight: 800;
+      font-size: 18px;
+      letter-spacing: 0.3px;
+      text-decoration: none;
+      color: var(--ink);
+    }
+
+    .nav {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .nav a {
+      text-decoration: none;
+      color: var(--sub);
+      border: 1px solid var(--line);
+      background: #fff;
+      border-radius: 999px;
+      padding: 7px 11px;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .hero {
+      margin-top: 18px;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: linear-gradient(145deg, rgba(255, 255, 255, 0.94), rgba(255, 255, 255, 0.84));
+      padding: 24px;
+      box-shadow: var(--shadow);
+    }
+
+    h1 {
+      margin: 0 0 10px;
+      font-family: "Sora", "Manrope", sans-serif;
+      font-size: clamp(28px, 4vw, 44px);
+      line-height: 1.1;
+      max-width: 16ch;
+    }
+
+    p {
+      margin: 0;
+      color: var(--sub);
+      line-height: 1.7;
+    }
+
+    .layer-grid {
+      margin-top: 16px;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .layer {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: #fff;
+      padding: 14px;
+    }
+
+    .layer strong {
+      display: block;
+      margin-bottom: 5px;
+      font-size: 15px;
+      font-family: "Sora", "Manrope", sans-serif;
+    }
+
+    .capability {
+      margin-top: 18px;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: #fff;
+      padding: 20px;
+    }
+
+    h2 {
+      margin: 0 0 10px;
+      font-family: "Sora", "Manrope", sans-serif;
+      font-size: 24px;
+    }
+
+    .list {
+      display: grid;
+      gap: 10px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .list li {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 12px;
+      background: linear-gradient(150deg, rgba(15, 107, 232, 0.05), rgba(255, 109, 67, 0.05));
+    }
+
+    .list strong {
+      display: block;
+      margin-bottom: 4px;
+      font-size: 14px;
+    }
+
+    .actions {
+      margin-top: 16px;
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      text-decoration: none;
+      border-radius: 10px;
+      padding: 10px 14px;
+      font-size: 13px;
+      font-weight: 800;
+      border: 1px solid var(--line);
+      color: var(--ink);
+      background: #fff;
+    }
+
+    .btn.primary {
+      border: 0;
+      color: #fff;
+      background: linear-gradient(135deg, var(--primary), var(--primary-deep));
+      box-shadow: 0 10px 24px rgba(15, 107, 232, 0.24);
+    }
+
+    @media (max-width: 860px) {
+      .layer-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header class="topbar">
+      <a class="brand" href="./index.html">NebulaGrid Cloud</a>
+      <nav class="nav" aria-label="Page links">
+        <a href="./index.html">Home</a>
+        <a href="./technical-assessment.html">Assessment</a>
+        <a href="./solution-demo.html">Demo</a>
+        <a href="./contact-architect.html">Architect</a>
+      </nav>
+    </header>
+
+    <section class="hero">
+      <h1>CDN-First Product Architecture</h1>
+      <p>
+        NebulaGrid Cloud uses a layered architecture where CDN is the traffic engine and other cloud modules
+        attach cleanly for security, compute, and observability.
+      </p>
+      <div class="layer-grid">
+        <article class="layer">
+          <strong>L1 Access and Routing</strong>
+          <p>Anycast ingress with intelligent DNS and policy-based route steering across regions.</p>
+        </article>
+        <article class="layer">
+          <strong>L2 Caching and Transport</strong>
+          <p>Tiered caching, protocol optimization, and persistent connection reuse for high request volume.</p>
+        </article>
+        <article class="layer">
+          <strong>L3 Security and Governance</strong>
+          <p>WAF, bot control, DDoS mitigation, and programmable traffic policies in one control plane.</p>
+        </article>
+        <article class="layer">
+          <strong>L4 Edge Compute and Data</strong>
+          <p>Edge functions, object storage, and log streaming to execute and observe workloads close to users.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="capability">
+      <h2>Reference Capability Map</h2>
+      <ul class="list">
+        <li>
+          <strong>Static and Dynamic Delivery</strong>
+          <p>Serve media objects, APIs, and app assets with consistent latency and fast origin fallback.</p>
+        </li>
+        <li>
+          <strong>Security by Default</strong>
+          <p>Apply WAF templates and bot policies as baseline controls before custom tuning by workload.</p>
+        </li>
+        <li>
+          <strong>Elastic Cost and Performance Control</strong>
+          <p>Balance traffic between premium and standard routes based on SLA tier and business period.</p>
+        </li>
+        <li>
+          <strong>Unified Observability</strong>
+          <p>Collect request logs and traces in near real time for operations, growth, and finance teams.</p>
+        </li>
+      </ul>
+      <div class="actions">
+        <a class="btn primary" href="./solution-demo.html">See a Live Solution Walkthrough</a>
+        <a class="btn" href="./index.html">Back to Home</a>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

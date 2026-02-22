@@ -1,0 +1,6 @@
+.env
+config/sni-routing.yaml
+generated/*
+!generated/.gitkeep
+state/backups/*
+!state/backups/.gitkeep

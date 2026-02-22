@@ -1,0 +1,676 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>NebulaGrid Cloud | CDN-First Cloud Platform</title>
+  <meta name="description" content="NebulaGrid Cloud is a CDN-first cloud provider offering edge computing, cloud security, object storage, and global network connectivity.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700;900&family=Sora:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #f4f8ff;
+      --ink: #122035;
+      --sub: #42536e;
+      --card: #ffffff;
+      --line: rgba(18, 32, 53, 0.12);
+      --primary: #0f6be8;
+      --primary-deep: #0a3c86;
+      --accent: #ff5f3a;
+      --mint: #18bdb4;
+      --glow: rgba(15, 107, 232, 0.2);
+      --shadow: 0 14px 40px rgba(18, 32, 53, 0.14);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      color: var(--ink);
+      font-family: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+      background:
+        radial-gradient(circle at 12% 12%, rgba(24, 189, 180, 0.22) 0, rgba(24, 189, 180, 0) 36%),
+        radial-gradient(circle at 90% 8%, rgba(255, 95, 58, 0.22) 0, rgba(255, 95, 58, 0) 34%),
+        linear-gradient(130deg, #edf4ff 0%, #f6f8fe 45%, #fff5ef 100%);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      background-image: linear-gradient(to right, rgba(18, 32, 53, 0.035) 1px, transparent 1px), linear-gradient(to bottom, rgba(18, 32, 53, 0.035) 1px, transparent 1px);
+      background-size: 44px 44px;
+      pointer-events: none;
+      z-index: -1;
+    }
+
+    .shell {
+      max-width: 1160px;
+      margin: 0 auto;
+      padding: 34px 22px 68px;
+    }
+
+    .topbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      padding: 14px 18px;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: rgba(255, 255, 255, 0.78);
+      backdrop-filter: blur(12px);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-family: "Sora", "Noto Sans SC", sans-serif;
+      font-weight: 800;
+      letter-spacing: 0.4px;
+      font-size: 20px;
+    }
+
+    .logo-dot {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: radial-gradient(circle at 30% 30%, #8cd2ff 0%, #0f6be8 62%, #0a3c86 100%);
+      box-shadow: 0 0 0 6px rgba(15, 107, 232, 0.13);
+    }
+
+    .top-note {
+      font-size: 13px;
+      color: var(--sub);
+      letter-spacing: 0.25px;
+    }
+
+    .hero {
+      margin-top: 24px;
+      display: grid;
+      grid-template-columns: 1.12fr 0.88fr;
+      gap: 24px;
+    }
+
+    .hero-main {
+      background: linear-gradient(160deg, rgba(255, 255, 255, 0.93) 0%, rgba(255, 255, 255, 0.79) 72%);
+      border: 1px solid var(--line);
+      border-radius: 22px;
+      padding: 34px;
+      box-shadow: var(--shadow);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .hero-main::after {
+      content: "";
+      position: absolute;
+      width: 320px;
+      height: 320px;
+      right: -120px;
+      top: -120px;
+      border-radius: 32%;
+      transform: rotate(18deg);
+      background: radial-gradient(circle at 36% 36%, rgba(15, 107, 232, 0.42) 0%, rgba(15, 107, 232, 0) 66%);
+      pointer-events: none;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      border-radius: 999px;
+      border: 1px solid rgba(15, 107, 232, 0.28);
+      background: rgba(15, 107, 232, 0.09);
+      padding: 8px 14px;
+      color: var(--primary-deep);
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.2px;
+    }
+
+    h1 {
+      margin: 16px 0 12px;
+      font-family: "Sora", "Noto Sans SC", sans-serif;
+      font-size: clamp(32px, 4.4vw, 56px);
+      line-height: 1.08;
+      letter-spacing: -1px;
+      max-width: 12ch;
+    }
+
+    .hero p {
+      margin: 0;
+      color: var(--sub);
+      font-size: 17px;
+      line-height: 1.72;
+      max-width: 50ch;
+    }
+
+    .cta-row {
+      margin-top: 24px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .btn {
+      border: 0;
+      border-radius: 12px;
+      padding: 12px 18px;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      transition: transform 0.25s ease, box-shadow 0.25s ease, background 0.25s ease;
+    }
+
+    .btn-primary {
+      color: #fff;
+      background: linear-gradient(135deg, var(--primary) 0%, var(--primary-deep) 100%);
+      box-shadow: 0 10px 24px var(--glow);
+    }
+
+    .btn-secondary {
+      color: var(--ink);
+      border: 1px solid var(--line);
+      background: #fff;
+    }
+
+    .btn:hover {
+      transform: translateY(-2px);
+    }
+
+    .hero-side {
+      display: grid;
+      gap: 14px;
+    }
+
+    .metric-panel {
+      background: linear-gradient(145deg, #0f6be8 0%, #0a3c86 100%);
+      color: #f2f8ff;
+      border-radius: 22px;
+      padding: 24px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      position: relative;
+      overflow: hidden;
+      box-shadow: var(--shadow);
+    }
+
+    .metric-panel::before {
+      content: "";
+      position: absolute;
+      width: 180px;
+      height: 180px;
+      border-radius: 24px;
+      right: -40px;
+      top: -20px;
+      transform: rotate(18deg);
+      background: linear-gradient(140deg, rgba(140, 210, 255, 0.42), rgba(140, 210, 255, 0));
+      pointer-events: none;
+    }
+
+    .metric-title {
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 1.2px;
+      opacity: 0.84;
+      margin-bottom: 14px;
+    }
+
+    .metric-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .metric-item strong {
+      font-family: "Sora", "Noto Sans SC", sans-serif;
+      font-size: 30px;
+      line-height: 1;
+      display: block;
+      margin-bottom: 6px;
+    }
+
+    .metric-item span {
+      font-size: 12px;
+      opacity: 0.84;
+    }
+
+    .mini-card {
+      border: 1px solid var(--line);
+      background: #fff;
+      border-radius: 18px;
+      padding: 18px;
+      box-shadow: 0 10px 24px rgba(18, 32, 53, 0.07);
+    }
+
+    .mini-card h3 {
+      margin: 0 0 8px;
+      font-size: 16px;
+      font-family: "Sora", "Noto Sans SC", sans-serif;
+    }
+
+    .mini-card p {
+      margin: 0;
+      color: var(--sub);
+      font-size: 14px;
+      line-height: 1.6;
+    }
+
+    section {
+      margin-top: 24px;
+      border: 1px solid var(--line);
+      border-radius: 22px;
+      background: rgba(255, 255, 255, 0.86);
+      backdrop-filter: blur(8px);
+      padding: 28px;
+      box-shadow: 0 8px 22px rgba(18, 32, 53, 0.08);
+    }
+
+    .section-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: end;
+      gap: 16px;
+      margin-bottom: 18px;
+    }
+
+    .section-head h2 {
+      margin: 0;
+      font-family: "Sora", "Noto Sans SC", sans-serif;
+      font-size: 30px;
+      letter-spacing: -0.6px;
+    }
+
+    .section-head p {
+      margin: 0;
+      color: var(--sub);
+      font-size: 14px;
+      max-width: 42ch;
+    }
+
+    .service-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .service-card {
+      border-radius: 16px;
+      padding: 18px;
+      background: #fff;
+      border: 1px solid var(--line);
+      position: relative;
+      min-height: 176px;
+      transition: transform 0.22s ease, border-color 0.22s ease;
+    }
+
+    .service-card:hover {
+      transform: translateY(-4px);
+      border-color: rgba(15, 107, 232, 0.45);
+    }
+
+    .service-card strong {
+      display: block;
+      margin-bottom: 8px;
+      font-size: 18px;
+      font-family: "Sora", "Noto Sans SC", sans-serif;
+    }
+
+    .service-card p {
+      margin: 0;
+      color: var(--sub);
+      line-height: 1.65;
+      font-size: 14px;
+    }
+
+    .service-tag {
+      display: inline-block;
+      margin-top: 12px;
+      border-radius: 999px;
+      padding: 5px 10px;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      background: rgba(24, 189, 180, 0.14);
+      color: #0f6f69;
+    }
+
+    .architecture {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    .layer {
+      border-radius: 14px;
+      border: 1px solid var(--line);
+      padding: 18px;
+      background: linear-gradient(130deg, rgba(15, 107, 232, 0.08), rgba(255, 95, 58, 0.08));
+    }
+
+    .layer h3 {
+      margin: 0 0 8px;
+      font-size: 17px;
+      font-family: "Sora", "Noto Sans SC", sans-serif;
+    }
+
+    .layer p {
+      margin: 0;
+      color: var(--sub);
+      font-size: 14px;
+      line-height: 1.65;
+    }
+
+    .scenes {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .scene {
+      border-radius: 14px;
+      border: 1px solid var(--line);
+      background: #fff;
+      padding: 16px;
+    }
+
+    .scene h4 {
+      margin: 0 0 8px;
+      font-size: 15px;
+      font-family: "Sora", "Noto Sans SC", sans-serif;
+    }
+
+    .scene p {
+      margin: 0;
+      font-size: 13px;
+      color: var(--sub);
+      line-height: 1.6;
+    }
+
+    .footer-cta {
+      margin-top: 24px;
+      border-radius: 22px;
+      padding: 28px;
+      background: linear-gradient(140deg, #10233f 0%, #114f9f 55%, #0d78b8 100%);
+      color: #eaf4ff;
+      position: relative;
+      overflow: hidden;
+      box-shadow: var(--shadow);
+    }
+
+    .footer-cta::after {
+      content: "";
+      position: absolute;
+      width: 220px;
+      height: 220px;
+      border-radius: 32px;
+      right: -60px;
+      top: -20px;
+      transform: rotate(22deg);
+      background: linear-gradient(145deg, rgba(255, 95, 58, 0.42), rgba(255, 95, 58, 0));
+      pointer-events: none;
+    }
+
+    .footer-cta h2 {
+      margin: 0 0 8px;
+      font-family: "Sora", "Noto Sans SC", sans-serif;
+      font-size: clamp(26px, 3.5vw, 40px);
+      max-width: 14ch;
+    }
+
+    .footer-cta p {
+      margin: 0;
+      font-size: 15px;
+      line-height: 1.7;
+      max-width: 52ch;
+      opacity: 0.95;
+    }
+
+    .footer-bar {
+      margin-top: 16px;
+      display: flex;
+      justify-content: space-between;
+      gap: 14px;
+      font-size: 13px;
+      color: rgba(234, 244, 255, 0.9);
+      flex-wrap: wrap;
+      border-top: 1px solid rgba(255, 255, 255, 0.18);
+      padding-top: 14px;
+    }
+
+    .reveal {
+      opacity: 0;
+      transform: translateY(18px);
+      animation: rise 0.8s ease forwards;
+    }
+
+    @keyframes rise {
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    @media (max-width: 1040px) {
+      .hero {
+        grid-template-columns: 1fr;
+      }
+
+      .service-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .scenes {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+
+    @media (max-width: 700px) {
+      .shell {
+        padding: 18px 14px 34px;
+      }
+
+      .topbar {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+
+      .hero-main,
+      section,
+      .footer-cta,
+      .metric-panel,
+      .mini-card {
+        padding: 18px;
+      }
+
+      .section-head {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+
+      .service-grid,
+      .architecture,
+      .scenes,
+      .metric-grid {
+        grid-template-columns: 1fr;
+      }
+
+      h1 {
+        letter-spacing: -0.4px;
+      }
+
+      .btn {
+        width: 100%;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header class="topbar reveal" style="animation-delay: 0.02s;">
+      <div class="brand">
+        <span class="logo-dot" aria-hidden="true"></span>
+        <span>NebulaGrid Cloud</span>
+      </div>
+      <div class="top-note">CDN-first, with integrated security, compute, storage, and networking services</div>
+    </header>
+
+    <section class="hero" style="border: 0; background: transparent; box-shadow: none; padding: 0; margin-top: 20px;">
+      <div class="hero-main reveal" style="animation-delay: 0.08s;">
+        <span class="badge">CDN-First Cloud Provider</span>
+        <h1>Delivering content and applications reliably to every user, everywhere</h1>
+        <p>
+          NebulaGrid Cloud is a cloud provider built around CDN as its core business. We use global delivery performance as the engine, then extend with edge computing, cloud security, object storage, real-time logs, and multi-cloud networking so teams can optimize performance, security, and cost on one platform.
+        </p>
+        <div class="cta-row">
+          <a class="btn btn-primary" href="./technical-assessment.html">Request a Technical Assessment</a>
+          <a class="btn btn-secondary" href="./product-architecture.html">View Product Architecture</a>
+        </div>
+      </div>
+
+      <aside class="hero-side">
+        <div class="metric-panel reveal" style="animation-delay: 0.15s;">
+          <div class="metric-title">Global Delivery Metrics</div>
+          <div class="metric-grid">
+            <div class="metric-item">
+              <strong>3200+</strong>
+              <span>Edge PoPs</span>
+            </div>
+            <div class="metric-item">
+              <strong>190+</strong>
+              <span>Countries & Regions</span>
+            </div>
+            <div class="metric-item">
+              <strong>35ms</strong>
+              <span>Avg Origin-Path Latency</span>
+            </div>
+            <div class="metric-item">
+              <strong>15Tbps</strong>
+              <span>DDoS Mitigation Capacity</span>
+            </div>
+          </div>
+        </div>
+        <div class="mini-card reveal" style="animation-delay: 0.22s;">
+          <h3>More Than a Single CDN Product</h3>
+          <p>CDN is our primary revenue and traffic engine, while Edge Functions, WAF, object storage, intelligent steering, and inter-cloud connectivity complete a full cloud service loop.</p>
+        </div>
+      </aside>
+    </section>
+
+    <section class="reveal" style="animation-delay: 0.3s;">
+      <div class="section-head">
+        <h2>Product Portfolio</h2>
+        <p>A CDN-centered cloud product system with both standalone purchase and bundled delivery options.</p>
+      </div>
+      <div class="service-grid">
+        <article class="service-card">
+          <strong>Global CDN Acceleration</strong>
+          <p>Intelligent routing, protocol optimization, multi-tier caching, and edge compression for faster static and dynamic delivery.</p>
+          <span class="service-tag">Core Business</span>
+        </article>
+        <article class="service-card">
+          <strong>Edge Functions</strong>
+          <p>Run authentication, A/B routing, content rewriting, and personalization at the nearest edge to reduce origin load.</p>
+          <span class="service-tag">Edge Compute</span>
+        </article>
+        <article class="service-card">
+          <strong>Cloud Security</strong>
+          <p>Unified WAF, bot management, DDoS protection, and rate limiting with centralized policy orchestration and real-time alerts.</p>
+          <span class="service-tag">Security</span>
+        </article>
+        <article class="service-card">
+          <strong>Object Storage OSS</strong>
+          <p>Hot/cold tiering, cross-region replication, and second-level lifecycle controls for media and large download workloads.</p>
+          <span class="service-tag">Storage</span>
+        </article>
+        <article class="service-card">
+          <strong>Intelligent Traffic Steering</strong>
+          <p>Route traffic by latency, cost, and availability to keep critical services continuous in active-active disaster recovery.</p>
+          <span class="service-tag">Networking</span>
+        </article>
+        <article class="service-card">
+          <strong>Real-Time Observability Platform</strong>
+          <p>Second-level log streaming, end-to-end tracing, and performance profiling in one operational view.</p>
+          <span class="service-tag">Observability</span>
+        </article>
+      </div>
+    </section>
+
+    <section class="reveal" style="animation-delay: 0.38s;">
+      <div class="section-head">
+        <h2>Four-Layer Delivery Architecture</h2>
+        <p>From user request to origin fetch, each layer has independent optimization strategies and can be enabled by business tier.</p>
+      </div>
+      <div class="architecture">
+        <article class="layer">
+          <h3>L1 Access and Scheduling Layer</h3>
+          <p>Anycast and intelligent DNS work together to switch paths at regional level based on real-time network conditions.</p>
+        </article>
+        <article class="layer">
+          <h3>L2 Caching and Transport Layer</h3>
+          <p>Multi-level cache hit optimization, connection reuse, chunked transfer, and protocol upgrades for stable high-concurrency throughput.</p>
+        </article>
+        <article class="layer">
+          <h3>L3 Security and Policy Layer</h3>
+          <p>A unified policy center distributes access controls, WAF rules, and bot detection models with canary rollout support.</p>
+        </article>
+        <article class="layer">
+          <h3>L4 Compute and Data Layer</h3>
+          <p>Edge functions and object storage run in coordination to support near-user compute, origin offload, and low-latency data processing.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="reveal" style="animation-delay: 0.46s;">
+      <div class="section-head">
+        <h2>Typical Business Scenarios</h2>
+        <p>From consumer internet to enterprise platforms, CDN core capabilities and cloud products can be combined on demand.</p>
+      </div>
+      <div class="scenes">
+        <article class="scene">
+          <h4>Streaming and Live Video</h4>
+          <p>Auto-scales edge capacity during peak periods to stabilize first-frame time and playback continuity.</p>
+        </article>
+        <article class="scene">
+          <h4>Cross-Border E-Commerce</h4>
+          <p>Combines static acceleration with API protection to keep page load and transactions stable during campaign peaks.</p>
+        </article>
+        <article class="scene">
+          <h4>Game Distribution</h4>
+          <p>Large file delivery and dynamic acceleration in parallel reduce update wait time and improve multi-region access experience.</p>
+        </article>
+        <article class="scene">
+          <h4>Global AI Applications</h4>
+          <p>Coordinates edge inference, model asset distribution, and log feedback loops to reduce global response latency.</p>
+        </article>
+      </div>
+    </section>
+
+    <footer class="footer-cta reveal" style="animation-delay: 0.54s;">
+      <h2>Go Deeper on CDN, Broaden Cloud Capability</h2>
+      <p>
+        We are not a "CDN-only company"; we are an integrated cloud platform with CDN as the growth engine.
+        From acceleration to security, and from compute to storage, NebulaGrid Cloud delivers an end-to-end platform.
+      </p>
+      <div class="cta-row" style="margin-top: 18px;">
+        <a class="btn btn-primary" href="./solution-demo.html">Book a Solution Demo</a>
+        <a class="btn btn-secondary" href="./contact-architect.html">Contact a Solutions Architect</a>
+      </div>
+      <div class="footer-bar">
+        <span>San Jose · Singapore · Frankfurt · Dubai</span>
+      </div>
+    </footer>
+  </main>
+</body>
+</html>

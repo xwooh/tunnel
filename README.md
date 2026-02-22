@@ -1,0 +1,67 @@
+# hypertunnel
+
+适用于 Ubuntu/Debian 的一键部署工具集。
+
+## 目录作用
+
+`hypertunnel/` 是独立部署工作目录。
+渲染阶段只会在此目录内读写。
+只有在 `deploy` 阶段才会写入系统路径（`/etc/nginx`、`/etc/sing-box`、`/var/www/html`）。
+
+## 前置条件
+
+1. 以 `root` 用户运行。
+2. 运行前准备好 `config/sni-routing.yaml`。
+3. 确保域名 DNS 已解析到当前 VPS。
+
+## 首次执行
+
+```bash
+cd hypertunnel
+cp .env.example .env
+./main.sh all
+```
+
+如果 `.env` 中缺少必填项，脚本会交互提示并自动写回。
+
+## 命令列表
+
+```bash
+./main.sh preflight
+./main.sh env
+./main.sh deps
+./main.sh cert
+./main.sh render
+./main.sh deploy
+./main.sh service
+./main.sh verify
+./main.sh all
+./main.sh rollback list
+./main.sh rollback <backup-id>
+```
+
+## 渲染产物
+
+执行 `render` 后会在 `generated/` 下生成：
+
+- `nginx.conf`
+- `config.json`（sing-box）
+- `mihomo-client.yaml`
+- `install-socks-proxy.sh`
+
+## 备份与回滚
+
+部署前会在以下位置生成快照：
+
+- `state/backups/<timestamp>/manifest.txt`
+
+回滚示例：
+
+```bash
+./main.sh rollback list
+./main.sh rollback 20260222-120000
+```
+
+## 说明
+
+- `ENABLE_WARP_INSTALL=auto` 时，仅在存在 `use_socks: true` 后端时自动安装 WARP socks。

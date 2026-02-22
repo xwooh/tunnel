@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Solution Demo | NebulaGrid Cloud</title>
+  <meta name="description" content="Book a solution demo for global CDN acceleration, cloud security, edge compute, and observability.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700;800&family=Sora:wght@500;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --ink: #10233b;
+      --sub: #3f5573;
+      --line: rgba(16, 35, 59, 0.14);
+      --bg: #f6f9ff;
+      --card: #ffffff;
+      --primary: #0f6be8;
+      --primary-deep: #0a3d8a;
+      --accent: #17bca7;
+      --shadow: 0 16px 36px rgba(16, 35, 59, 0.14);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      color: var(--ink);
+      font-family: "Manrope", "Segoe UI", sans-serif;
+      background:
+        radial-gradient(circle at 0% 0%, rgba(23, 188, 167, 0.18), rgba(23, 188, 167, 0) 42%),
+        radial-gradient(circle at 100% 6%, rgba(15, 107, 232, 0.16), rgba(15, 107, 232, 0) 38%),
+        linear-gradient(130deg, #ebf3ff 0%, #f8fbff 44%, #ffffff 100%);
+      min-height: 100vh;
+    }
+
+    .shell {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 24px 18px 40px;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.85);
+      backdrop-filter: blur(8px);
+      padding: 12px 14px;
+    }
+
+    .brand {
+      font-family: "Sora", "Manrope", sans-serif;
+      font-weight: 800;
+      font-size: 18px;
+      letter-spacing: 0.3px;
+      text-decoration: none;
+      color: var(--ink);
+    }
+
+    .nav {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .nav a {
+      text-decoration: none;
+      color: var(--sub);
+      border: 1px solid var(--line);
+      background: #fff;
+      border-radius: 999px;
+      padding: 7px 11px;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .hero {
+      margin-top: 18px;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: linear-gradient(145deg, rgba(255, 255, 255, 0.94), rgba(255, 255, 255, 0.84));
+      padding: 24px;
+      box-shadow: var(--shadow);
+      display: grid;
+      grid-template-columns: 1.1fr 0.9fr;
+      gap: 14px;
+    }
+
+    h1 {
+      margin: 0 0 10px;
+      font-family: "Sora", "Manrope", sans-serif;
+      font-size: clamp(28px, 4vw, 44px);
+      line-height: 1.1;
+      max-width: 14ch;
+    }
+
+    p {
+      margin: 0;
+      color: var(--sub);
+      line-height: 1.7;
+    }
+
+    .agenda {
+      display: grid;
+      gap: 10px;
+    }
+
+    .item {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 12px;
+      background: #fff;
+    }
+
+    .item strong {
+      display: block;
+      margin-bottom: 4px;
+      font-size: 14px;
+      font-family: "Sora", "Manrope", sans-serif;
+    }
+
+    .scope {
+      margin-top: 18px;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: #fff;
+      padding: 20px;
+    }
+
+    h2 {
+      margin: 0 0 10px;
+      font-family: "Sora", "Manrope", sans-serif;
+      font-size: 24px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .card {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 12px;
+      background: linear-gradient(160deg, rgba(15, 107, 232, 0.05), rgba(23, 188, 167, 0.05));
+    }
+
+    .card strong {
+      display: block;
+      margin-bottom: 4px;
+      font-size: 14px;
+    }
+
+    .actions {
+      margin-top: 14px;
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      text-decoration: none;
+      border-radius: 10px;
+      padding: 10px 14px;
+      font-size: 13px;
+      font-weight: 800;
+      border: 1px solid var(--line);
+      color: var(--ink);
+      background: #fff;
+    }
+
+    .btn.primary {
+      border: 0;
+      color: #fff;
+      background: linear-gradient(135deg, var(--primary), var(--primary-deep));
+      box-shadow: 0 10px 24px rgba(15, 107, 232, 0.24);
+    }
+
+    @media (max-width: 920px) {
+      .hero,
+      .grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header class="topbar">
+      <a class="brand" href="./index.html">NebulaGrid Cloud</a>
+      <nav class="nav" aria-label="Page links">
+        <a href="./index.html">Home</a>
+        <a href="./technical-assessment.html">Assessment</a>
+        <a href="./product-architecture.html">Architecture</a>
+        <a href="./contact-architect.html">Architect</a>
+      </nav>
+    </header>
+
+    <section class="hero">
+      <div>
+        <h1>Book a Solution Demo</h1>
+        <p>
+          We run practical demos based on your workload, not generic slides.
+          You will see how CDN, security, and edge logic behave on realistic traffic patterns.
+        </p>
+      </div>
+      <div class="agenda">
+        <article class="item">
+          <strong>00:00 - 00:10 | Business Context</strong>
+          <p>Map your existing architecture, SLAs, and current pain points.</p>
+        </article>
+        <article class="item">
+          <strong>00:10 - 00:30 | Live Platform Walkthrough</strong>
+          <p>Observe cache policy changes, WAF controls, and route steering in real time.</p>
+        </article>
+        <article class="item">
+          <strong>00:30 - 00:45 | Migration and Cost Model</strong>
+          <p>Review staged rollout options, timeline risks, and cost-performance tradeoffs.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="scope">
+      <h2>Demo Scope Options</h2>
+      <div class="grid">
+        <article class="card">
+          <strong>Media and Streaming</strong>
+          <p>Adaptive delivery profile, edge caching strategy, and peak event handling.</p>
+        </article>
+        <article class="card">
+          <strong>API and Dynamic Apps</strong>
+          <p>Origin shielding, TCP tuning, and path-level security policy examples.</p>
+        </article>
+        <article class="card">
+          <strong>Global Commerce</strong>
+          <p>Checkout route prioritization and anti-bot controls for promotion windows.</p>
+        </article>
+      </div>
+      <div class="actions">
+        <a class="btn primary" href="./contact-architect.html">Schedule with an Architect</a>
+        <a class="btn" href="./index.html">Back to Home</a>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

@@ -1,0 +1,395 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Technical Assessment | NebulaGrid Cloud</title>
+  <meta name="description" content="Request a technical assessment for CDN, security, edge computing, and cloud delivery optimization.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700;800&family=Sora:wght@500;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --ink: #10233b;
+      --sub: #3f5573;
+      --line: rgba(16, 35, 59, 0.14);
+      --bg: #f3f7ff;
+      --card: #ffffff;
+      --primary: #0f6be8;
+      --primary-deep: #0a3d8a;
+      --accent: #17bca7;
+      --shadow: 0 16px 36px rgba(16, 35, 59, 0.14);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      color: var(--ink);
+      font-family: "Manrope", "Segoe UI", sans-serif;
+      background:
+        radial-gradient(circle at 0% 0%, rgba(23, 188, 167, 0.18), rgba(23, 188, 167, 0) 42%),
+        radial-gradient(circle at 100% 0%, rgba(15, 107, 232, 0.16), rgba(15, 107, 232, 0) 40%),
+        linear-gradient(130deg, #ebf3ff 0%, #f8fbff 44%, #ffffff 100%);
+      min-height: 100vh;
+    }
+
+    .shell {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 24px 18px 40px;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.85);
+      backdrop-filter: blur(8px);
+      padding: 12px 14px;
+    }
+
+    .brand {
+      font-family: "Sora", "Manrope", sans-serif;
+      font-weight: 800;
+      font-size: 18px;
+      letter-spacing: 0.3px;
+      text-decoration: none;
+      color: var(--ink);
+    }
+
+    .nav {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .nav a {
+      text-decoration: none;
+      color: var(--sub);
+      border: 1px solid var(--line);
+      background: #fff;
+      border-radius: 999px;
+      padding: 7px 11px;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .hero {
+      margin-top: 18px;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: linear-gradient(145deg, rgba(255, 255, 255, 0.94), rgba(255, 255, 255, 0.84));
+      padding: 24px;
+      box-shadow: var(--shadow);
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 18px;
+    }
+
+    h1 {
+      margin: 0 0 10px;
+      font-family: "Sora", "Manrope", sans-serif;
+      font-size: clamp(28px, 4vw, 44px);
+      line-height: 1.1;
+      max-width: 14ch;
+    }
+
+    p {
+      margin: 0;
+      color: var(--sub);
+      line-height: 1.7;
+    }
+
+    .steps {
+      display: grid;
+      gap: 10px;
+    }
+
+    .step {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 12px;
+      background: #fff;
+    }
+
+    .step strong {
+      display: block;
+      margin-bottom: 4px;
+      font-size: 14px;
+      font-family: "Sora", "Manrope", sans-serif;
+    }
+
+    .form-card {
+      margin-top: 18px;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: #fff;
+      padding: 20px;
+    }
+
+    .form-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    label {
+      display: grid;
+      gap: 6px;
+      font-size: 12px;
+      font-weight: 700;
+      color: #203652;
+      letter-spacing: 0.2px;
+      text-transform: uppercase;
+    }
+
+    input,
+    select,
+    textarea {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 10px 11px;
+      font: inherit;
+      font-size: 14px;
+      color: var(--ink);
+      background: #fff;
+    }
+
+    textarea {
+      min-height: 110px;
+      resize: vertical;
+    }
+
+    .span-2 { grid-column: span 2; }
+
+    .actions {
+      margin-top: 12px;
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      text-decoration: none;
+      border-radius: 10px;
+      padding: 10px 14px;
+      font-size: 13px;
+      font-weight: 800;
+      border: 1px solid var(--line);
+      color: var(--ink);
+      background: #fff;
+    }
+
+    .btn.primary {
+      border: 0;
+      color: #fff;
+      background: linear-gradient(135deg, var(--primary), var(--primary-deep));
+      box-shadow: 0 10px 24px rgba(15, 107, 232, 0.24);
+    }
+
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      background: rgba(16, 35, 59, 0.45);
+      z-index: 1000;
+    }
+
+    .modal-backdrop[hidden] {
+      display: none !important;
+    }
+
+    .modal {
+      width: min(420px, 100%);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: #fff;
+      padding: 18px;
+      box-shadow: 0 24px 54px rgba(16, 35, 59, 0.24);
+      animation: modal-up 0.2s ease;
+    }
+
+    .modal h3 {
+      margin: 0 0 8px;
+      font-family: "Sora", "Manrope", sans-serif;
+      font-size: 20px;
+    }
+
+    .modal p {
+      margin: 0;
+      color: var(--sub);
+    }
+
+    .modal-actions {
+      margin-top: 14px;
+      display: flex;
+      justify-content: flex-end;
+    }
+
+    @keyframes modal-up {
+      from {
+        opacity: 0;
+        transform: translateY(8px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .footer {
+      margin-top: 14px;
+      color: var(--sub);
+      font-size: 12px;
+    }
+
+    @media (max-width: 860px) {
+      .hero,
+      .form-grid { grid-template-columns: 1fr; }
+      .span-2 { grid-column: span 1; }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header class="topbar">
+      <a class="brand" href="./index.html">NebulaGrid Cloud</a>
+      <nav class="nav" aria-label="Page links">
+        <a href="./index.html">Home</a>
+        <a href="./product-architecture.html">Architecture</a>
+        <a href="./solution-demo.html">Demo</a>
+        <a href="./contact-architect.html">Architect</a>
+      </nav>
+    </header>
+
+    <section class="hero">
+      <div>
+        <h1>Technical Assessment Request</h1>
+        <p>
+          Share your current traffic profile and delivery challenges. Our team will provide a
+          baseline assessment with performance gaps, security risks, and a phased optimization plan.
+        </p>
+      </div>
+      <div class="steps">
+        <article class="step">
+          <strong>Step 1. Baseline Review</strong>
+          <p>Analyze cache hit ratio, origin latency, TLS setup, and regional request patterns.</p>
+        </article>
+        <article class="step">
+          <strong>Step 2. Risk and Cost Report</strong>
+          <p>Identify attack exposure, service bottlenecks, and traffic routes with unnecessary cost.</p>
+        </article>
+        <article class="step">
+          <strong>Step 3. Rollout Blueprint</strong>
+          <p>Deliver an actionable rollout path for CDN, security controls, and edge workload placement.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="form-card" aria-label="Assessment form">
+      <div class="form-grid">
+        <label>
+          Full Name
+          <input type="text" placeholder="Alex Rivera">
+        </label>
+        <label>
+          Work Email
+          <input type="email" placeholder="alex@company.com">
+        </label>
+        <label>
+          Company
+          <input type="text" placeholder="Northwind Media">
+        </label>
+        <label>
+          Monthly Data Transfer
+          <select>
+            <option>< 50 TB</option>
+            <option>50 TB - 300 TB</option>
+            <option>300 TB - 1 PB</option>
+            <option>> 1 PB</option>
+          </select>
+        </label>
+        <label>
+          Primary Region
+          <select>
+            <option>North America</option>
+            <option>Europe</option>
+            <option>APAC</option>
+            <option>Global</option>
+          </select>
+        </label>
+        <label>
+          Main Workload
+          <select>
+            <option>Streaming</option>
+            <option>E-commerce</option>
+            <option>Gaming</option>
+            <option>Enterprise SaaS</option>
+          </select>
+        </label>
+        <label class="span-2">
+          Delivery and Security Challenges
+          <textarea placeholder="Describe your current issues, for example low cache hit ratio, high first-byte latency, or recurring L7 attacks."></textarea>
+        </label>
+      </div>
+      <div class="actions">
+        <button class="btn primary" id="assessment-submit-btn" type="button">Submit Assessment Request</button>
+        <a class="btn" href="./index.html">Back to Home</a>
+      </div>
+      <p class="footer">Typical first response time: within one business day.</p>
+    </section>
+  </main>
+
+  <div aria-describedby="assessment-modal-desc" aria-labelledby="assessment-modal-title" aria-modal="true" class="modal-backdrop" hidden id="assessment-success-modal" role="dialog">
+    <div class="modal">
+      <h3 id="assessment-modal-title">Submitted Successfully</h3>
+      <p id="assessment-modal-desc">Your assessment request has been received. We will contact you soon.</p>
+      <div class="modal-actions">
+        <button class="btn primary" id="assessment-modal-ok" type="button">OK</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      const submitBtn = document.getElementById("assessment-submit-btn");
+      const successModal = document.getElementById("assessment-success-modal");
+      const modalOk = document.getElementById("assessment-modal-ok");
+
+      if (!submitBtn || !successModal || !modalOk) {
+        return;
+      }
+
+      const closeModal = () => {
+        successModal.hidden = true;
+      };
+
+      submitBtn.addEventListener("click", () => {
+        successModal.hidden = false;
+      });
+
+      modalOk.addEventListener("click", closeModal);
+
+      successModal.addEventListener("click", (event) => {
+        if (event.target === successModal) {
+          closeModal();
+        }
+      });
+
+      document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape" && !successModal.hidden) {
+          closeModal();
+        }
+      });
+    })();
+  </script>
+</body>
+</html>

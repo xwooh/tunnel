@@ -1,0 +1,397 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Contact a Solutions Architect | NebulaGrid Cloud</title>
+  <meta name="description" content="Connect with a solutions architect for CDN and cloud architecture planning.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700;800&family=Sora:wght@500;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --ink: #10233b;
+      --sub: #3f5573;
+      --line: rgba(16, 35, 59, 0.14);
+      --bg: #f6f9ff;
+      --card: #ffffff;
+      --primary: #0f6be8;
+      --primary-deep: #0a3d8a;
+      --accent: #ff6d43;
+      --shadow: 0 16px 36px rgba(16, 35, 59, 0.14);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      color: var(--ink);
+      font-family: "Manrope", "Segoe UI", sans-serif;
+      background:
+        radial-gradient(circle at 10% 0%, rgba(255, 109, 67, 0.18), rgba(255, 109, 67, 0) 34%),
+        radial-gradient(circle at 100% 0%, rgba(15, 107, 232, 0.16), rgba(15, 107, 232, 0) 40%),
+        linear-gradient(130deg, #ebf3ff 0%, #f8fbff 44%, #ffffff 100%);
+      min-height: 100vh;
+    }
+
+    .shell {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 24px 18px 40px;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.85);
+      backdrop-filter: blur(8px);
+      padding: 12px 14px;
+    }
+
+    .brand {
+      font-family: "Sora", "Manrope", sans-serif;
+      font-weight: 800;
+      font-size: 18px;
+      letter-spacing: 0.3px;
+      text-decoration: none;
+      color: var(--ink);
+    }
+
+    .nav {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .nav a {
+      text-decoration: none;
+      color: var(--sub);
+      border: 1px solid var(--line);
+      background: #fff;
+      border-radius: 999px;
+      padding: 7px 11px;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .hero {
+      margin-top: 18px;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: linear-gradient(145deg, rgba(255, 255, 255, 0.94), rgba(255, 255, 255, 0.84));
+      padding: 24px;
+      box-shadow: var(--shadow);
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    h1 {
+      margin: 0 0 10px;
+      font-family: "Sora", "Manrope", sans-serif;
+      font-size: clamp(28px, 4vw, 44px);
+      line-height: 1.1;
+      max-width: 14ch;
+    }
+
+    p {
+      margin: 0;
+      color: var(--sub);
+      line-height: 1.7;
+    }
+
+    .chips {
+      margin-top: 14px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .chips span {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 6px 10px;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--ink);
+      background: #fff;
+    }
+
+    .contact-card {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #fff;
+      padding: 14px;
+      display: grid;
+      gap: 8px;
+    }
+
+    .contact-card strong {
+      font-family: "Sora", "Manrope", sans-serif;
+      font-size: 16px;
+    }
+
+    .form {
+      margin-top: 18px;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: #fff;
+      padding: 20px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    label {
+      display: grid;
+      gap: 6px;
+      font-size: 12px;
+      font-weight: 700;
+      color: #203652;
+      letter-spacing: 0.2px;
+      text-transform: uppercase;
+    }
+
+    input,
+    select,
+    textarea {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 10px 11px;
+      font: inherit;
+      font-size: 14px;
+      color: var(--ink);
+      background: #fff;
+    }
+
+    textarea {
+      min-height: 110px;
+      resize: vertical;
+    }
+
+    .span-2 { grid-column: span 2; }
+
+    .actions {
+      margin-top: 14px;
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      text-decoration: none;
+      border-radius: 10px;
+      padding: 10px 14px;
+      font-size: 13px;
+      font-weight: 800;
+      border: 1px solid var(--line);
+      color: var(--ink);
+      background: #fff;
+    }
+
+    .btn.primary {
+      border: 0;
+      color: #fff;
+      background: linear-gradient(135deg, var(--primary), var(--primary-deep));
+      box-shadow: 0 10px 24px rgba(15, 107, 232, 0.24);
+    }
+
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      background: rgba(16, 35, 59, 0.45);
+      z-index: 1000;
+    }
+
+    .modal-backdrop[hidden] {
+      display: none !important;
+    }
+
+    .modal {
+      width: min(420px, 100%);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: #fff;
+      padding: 18px;
+      box-shadow: 0 24px 54px rgba(16, 35, 59, 0.24);
+      animation: modal-up 0.2s ease;
+    }
+
+    .modal h3 {
+      margin: 0 0 8px;
+      font-family: "Sora", "Manrope", sans-serif;
+      font-size: 20px;
+    }
+
+    .modal p {
+      margin: 0;
+      color: var(--sub);
+    }
+
+    .modal-actions {
+      margin-top: 14px;
+      display: flex;
+      justify-content: flex-end;
+    }
+
+    @keyframes modal-up {
+      from {
+        opacity: 0;
+        transform: translateY(8px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    @media (max-width: 860px) {
+      .hero,
+      .grid { grid-template-columns: 1fr; }
+      .span-2 { grid-column: span 1; }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header class="topbar">
+      <a class="brand" href="./index.html">NebulaGrid Cloud</a>
+      <nav class="nav" aria-label="Page links">
+        <a href="./index.html">Home</a>
+        <a href="./technical-assessment.html">Assessment</a>
+        <a href="./product-architecture.html">Architecture</a>
+        <a href="./solution-demo.html">Demo</a>
+      </nav>
+    </header>
+
+    <section class="hero">
+      <div>
+        <h1>Contact a Solutions Architect</h1>
+        <p>
+          Talk directly with an architect to plan migration strategy, policy rollout, and performance targets.
+          Sessions are tailored for your business timeline and risk profile.
+        </p>
+        <div class="chips">
+          <span>CDN Migration</span>
+          <span>WAF and DDoS</span>
+          <span>Edge Functions</span>
+          <span>Traffic Cost Control</span>
+        </div>
+      </div>
+      <article class="contact-card">
+        <strong>What to Expect</strong>
+        <p>One focused architecture call with implementation recommendations and next-step milestones.</p>
+        <p>Typical scheduling window: 1 to 2 business days.</p>
+        <p>Output includes rollout sequence, risk checklist, and environment prerequisites.</p>
+      </article>
+    </section>
+
+    <section class="form" aria-label="Architect contact form">
+      <div class="grid">
+        <label>
+          Full Name
+          <input type="text" placeholder="Jordan Patel">
+        </label>
+        <label>
+          Work Email
+          <input type="email" placeholder="jordan@company.com">
+        </label>
+        <label>
+          Company
+          <input type="text" placeholder="Acme Platform">
+        </label>
+        <label>
+          Team Role
+          <select>
+            <option>Engineering</option>
+            <option>Infrastructure</option>
+            <option>Security</option>
+            <option>Product</option>
+          </select>
+        </label>
+        <label>
+          Preferred Contact Window
+          <select>
+            <option>Within 24 hours</option>
+            <option>This week</option>
+            <option>Next week</option>
+          </select>
+        </label>
+        <label>
+          Priority Topic
+          <select>
+            <option>Global performance</option>
+            <option>Security hardening</option>
+            <option>Cost optimization</option>
+            <option>Migration planning</option>
+          </select>
+        </label>
+        <label class="span-2">
+          Current Architecture Notes
+          <textarea placeholder="Add context on your current providers, traffic profile, and any delivery or security constraints."></textarea>
+        </label>
+      </div>
+      <div class="actions">
+        <button class="btn primary" id="send-request-btn" type="button">Send Request</button>
+        <a class="btn" href="./index.html">Back to Home</a>
+      </div>
+    </section>
+  </main>
+
+  <div aria-describedby="success-modal-desc" aria-labelledby="success-modal-title" aria-modal="true" class="modal-backdrop" hidden id="success-modal" role="dialog">
+    <div class="modal">
+      <h3 id="success-modal-title">Submitted Successfully</h3>
+      <p id="success-modal-desc">Your request has been received. Our team will contact you soon.</p>
+      <div class="modal-actions">
+        <button class="btn primary" id="success-modal-ok" type="button">OK</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      const sendRequestBtn = document.getElementById("send-request-btn");
+      const successModal = document.getElementById("success-modal");
+      const successModalOk = document.getElementById("success-modal-ok");
+
+      if (!sendRequestBtn || !successModal || !successModalOk) {
+        return;
+      }
+
+      const closeModal = () => {
+        successModal.hidden = true;
+      };
+
+      sendRequestBtn.addEventListener("click", () => {
+        successModal.hidden = false;
+      });
+
+      successModalOk.addEventListener("click", closeModal);
+
+      successModal.addEventListener("click", (event) => {
+        if (event.target === successModal) {
+          closeModal();
+        }
+      });
+
+      document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape" && !successModal.hidden) {
+          closeModal();
+        }
+      });
+    })();
+  </script>
+</body>
+</html>
