@@ -35,10 +35,13 @@ cp .env.example .env
 ./main.sh deploy
 ./main.sh service
 ./main.sh verify
+./main.sh nearby
 ./main.sh all
 ./main.sh rollback list
 ./main.sh rollback <backup-id>
 ```
+
+`nearby` 会在首次运行时按 `lib/nearby.sh` 中的 `RIFT_VERSION` 下载对应版本的 `rift` 到 `state/tools/rift/<RIFT_VERSION>/`，随后复用本地缓存并直接启动扫描。
 
 ## 渲染产物
 
@@ -65,3 +68,4 @@ cp .env.example .env
 ## 说明
 
 - `ENABLE_WARP_INSTALL=auto` 时，仅在存在 `use_socks: true` 后端时自动安装 WARP socks。
+- `nearby` 会根据 `RIFT_VERSION` 生成 `rift-v<RIFT_VERSION>-linux-x86_64-musl` 下载包名，需要在 Linux x86_64 主机上运行。
