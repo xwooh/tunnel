@@ -10,9 +10,9 @@ acme_bin() {
 
 collect_cert_triplets() {
   local static_domain static_cert static_key
-  static_domain="$(get_static_site_domain)"
-  static_cert="$(read_yaml_required '.static_site.cert_file' 'static_site.cert_file')"
-  static_key="$(read_yaml_required '.static_site.key_file' 'static_site.key_file')"
+  static_domain="$(get_effective_static_site_domain)"
+  static_cert="$(get_effective_static_site_cert_file)"
+  static_key="$(get_effective_static_site_key_file)"
 
   printf '%s|%s|%s\n' "$static_domain" "$static_cert" "$static_key"
 

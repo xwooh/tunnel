@@ -41,23 +41,7 @@ http {
     access_log /var/log/nginx/access.log;
     error_log /var/log/nginx/error.log warn;
 
+__STATIC_SERVER_BLOCK__
+
 __TROJAN_FALLBACK_SERVER_BLOCK__
-
-    server {
-        listen __STATIC_LISTEN__ ssl;
-        server_name __DEFAULT_STATIC_HTML_DOMAIN__;
-
-        ssl_certificate __STATIC_CERT_FILE__;
-        ssl_certificate_key __STATIC_KEY_FILE__;
-        ssl_session_cache shared:SSL:20m;
-        ssl_session_timeout 10m;
-        ssl_protocols TLSv1.2 TLSv1.3;
-
-        root __STATIC_WEB_ROOT__;
-        index index.html;
-
-        location / {
-            try_files $uri $uri/ /index.html;
-        }
-    }
 }

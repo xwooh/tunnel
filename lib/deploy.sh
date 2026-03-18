@@ -68,30 +68,77 @@ is_warp_installed() {
   return 1
 }
 
-deploy_generated_files() {
-  local web_root
-  web_root="$(read_yaml_required '.static_site.web_root' 'static_site.web_root')"
+append_unique_line() {
+  local var_name="$1"
+  local value="$2"
+  local current="${!var_name}"
 
-  mkdir -p /etc/nginx /etc/sing-box /etc/systemd/system "$web_root" /root
+  [[ -n "$value" ]] || return 0
+
+  if [[ -n "$current" ]] && awk -v target="$value" '$0 == target { found = 1 } END { exit found ? 0 : 1 }' <<< "$current"; then
+    return 0
+  fi
+
+  if [[ -n "$current" ]]; then
+    current+=$'\n'
+  fi
+  current+="$value"
+  printf -v "$var_name" '%s' "$current"
+}
+
+collect_static_web_roots() {
+  local web_roots=""
+  append_unique_line web_roots "$(get_effective_static_site_web_root)"
+
+  local trojan_count i enabled web_root
+  trojan_count="$(yq e '(.trojan_backends // []) | length' "$CONFIG_FILE")"
+
+  for (( i = 0; i < trojan_count; i++ )); do
+    enabled="$(read_yaml_optional ".trojan_backends[$i].fallback_site.enabled" 'false')"
+    if ! is_true "$enabled"; then
+      continue
+    fi
+
+    web_root="$(resolve_fallback_site_web_root "$i")"
+    append_unique_line web_roots "$web_root"
+  done
+
+  printf '%s\n' "$web_roots"
+}
+
+deploy_generated_files() {
+  local web_roots web_root
+  web_roots="$(collect_static_web_roots)"
+
+  mkdir -p /etc/nginx /etc/sing-box /etc/systemd/system /root
+
+  while IFS= read -r web_root; do
+    [[ -n "$web_root" ]] || continue
+    mkdir -p "$web_root"
+  done <<< "$web_roots"
 
   install -m 644 "${GENERATED_DIR}/nginx.conf" /etc/nginx/nginx.conf
   install -m 644 "${GENERATED_DIR}/config.json" /etc/sing-box/config.json
   install -m 644 "${ASSET_SYSTEMD_DIR}/sing-box.service" /etc/systemd/system/sing-box.service
   install -m 755 "${GENERATED_DIR}/install-socks-proxy.sh" /root/install-socks-proxy.sh
 
-  shopt -s nullglob
-  local html
-  for html in "${ASSET_NGINX_DIR}"/*.html; do
-    install -m 644 "$html" "${web_root}/$(basename "$html")"
-  done
-  shopt -u nullglob
+  while IFS= read -r web_root; do
+    [[ -n "$web_root" ]] || continue
+
+    shopt -s nullglob
+    local html
+    for html in "${ASSET_NGINX_DIR}"/*.html; do
+      install -m 644 "$html" "${web_root}/$(basename "$html")"
+    done
+    shopt -u nullglob
+  done <<< "$web_roots"
 
   log_info "部署文件已复制到系统目录"
 }
 
 create_backup_snapshot() {
-  local web_root backup_id backup_dir manifest_file
-  web_root="$(read_yaml_required '.static_site.web_root' 'static_site.web_root')"
+  local web_roots web_root backup_id backup_dir manifest_file
+  web_roots="$(collect_static_web_roots)"
 
   backup_id="$(date '+%Y%m%d-%H%M%S')"
   backup_dir="${BACKUP_ROOT}/${backup_id}"
@@ -105,12 +152,16 @@ create_backup_snapshot() {
   backup_target_file "/etc/systemd/system/sing-box.service" "$backup_dir" "$manifest_file"
   backup_target_file "/root/install-socks-proxy.sh" "$backup_dir" "$manifest_file"
 
-  shopt -s nullglob
-  local html
-  for html in "${ASSET_NGINX_DIR}"/*.html; do
-    backup_target_file "${web_root}/$(basename "$html")" "$backup_dir" "$manifest_file"
-  done
-  shopt -u nullglob
+  while IFS= read -r web_root; do
+    [[ -n "$web_root" ]] || continue
+
+    shopt -s nullglob
+    local html
+    for html in "${ASSET_NGINX_DIR}"/*.html; do
+      backup_target_file "${web_root}/$(basename "$html")" "$backup_dir" "$manifest_file"
+    done
+    shopt -u nullglob
+  done <<< "$web_roots"
 
   printf '%s\n' "$backup_id" > "${STATE_DIR}/last-backup"
   log_info "已创建备份: ${backup_id}"

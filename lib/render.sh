@@ -19,13 +19,22 @@ normalize_bool() {
 }
 
 validate_unique_bindings() {
-  local static_domain static_port socks_proxy_port
-  static_domain="$(get_static_site_domain)"
-  static_port="$(read_yaml_required '.static_site.listen_port' 'static_site.listen_port')"
+  local socks_proxy_port
   socks_proxy_port="$(get_socks_proxy_port)"
 
-  assert_port "$static_port" 'static_site.listen_port'
   assert_port "$socks_proxy_port" 'egress.socks_proxy.port'
+
+  if has_explicit_static_site; then
+    local static_domain static_port
+    static_domain="$(read_yaml_required '.static_site.domain' 'static_site.domain')"
+    static_port="$(read_yaml_required '.static_site.listen_port' 'static_site.listen_port')"
+    assert_port "$static_port" 'static_site.listen_port'
+  else
+    get_effective_static_site_domain >/dev/null
+    get_effective_static_site_web_root >/dev/null
+    get_effective_static_site_cert_file >/dev/null
+    get_effective_static_site_key_file >/dev/null
+  fi
 
   local reality_count trojan_count
   reality_count="$(yq e '(.reality_backends // []) | length' "$CONFIG_FILE")"
@@ -67,8 +76,13 @@ validate_unique_bindings() {
     printf -v "$var_name" '%s' "$table"
   }
 
-  add_seen_binding seen_servernames "$static_domain" 'static_site.domain'
-  add_seen_binding seen_ports "$static_port" 'static_site.listen_port'
+  if has_explicit_static_site; then
+    local static_domain static_port
+    static_domain="$(read_yaml_required '.static_site.domain' 'static_site.domain')"
+    static_port="$(read_yaml_required '.static_site.listen_port' 'static_site.listen_port')"
+    add_seen_binding seen_servernames "$static_domain" 'static_site.domain'
+    add_seen_binding seen_ports "$static_port" 'static_site.listen_port'
+  fi
 
   local duplicated_port
   duplicated_port="$(lookup_seen_binding "$seen_ports" "$socks_proxy_port")"
@@ -121,6 +135,7 @@ validate_unique_bindings() {
 
     fallback_enabled="$(normalize_bool "$(read_yaml_optional ".trojan_backends[$i].fallback_site.enabled" 'false')" "${where}.fallback_site.enabled")"
     if is_true "$fallback_enabled"; then
+      resolve_fallback_site_web_root "$i" >/dev/null
       fallback_port="$(read_yaml_optional ".trojan_backends[$i].fallback_site.listen_port" '37980')"
       assert_port "$fallback_port" "${where}.fallback_site.listen_port"
       local duplicated_fallback_port
@@ -134,14 +149,22 @@ validate_unique_bindings() {
 }
 
 default_backend_value() {
-  local action static_host static_port
+  local action
   action="$(lower "$(get_unknown_sni_action)")"
-  static_host="$(read_yaml_required '.static_site.listen_host' 'static_site.listen_host')"
-  static_port="$(read_yaml_required '.static_site.listen_port' 'static_site.listen_port')"
 
   case "$action" in
     fallback_static)
-      printf '%s:%s' "$static_host" "$static_port"
+      if has_explicit_static_site; then
+        local static_host static_port
+        static_host="$(read_yaml_required '.static_site.listen_host' 'static_site.listen_host')"
+        static_port="$(read_yaml_required '.static_site.listen_port' 'static_site.listen_port')"
+        printf '%s:%s' "$static_host" "$static_port"
+      else
+        local trojan_listen_port
+        trojan_listen_port="$(get_primary_fallback_trojan_listen_port)"
+        assert_port "$trojan_listen_port" "trojan_backends[$(get_primary_fallback_trojan_index)].listen_port"
+        printf '127.0.0.1:%s' "$trojan_listen_port"
+      fi
       ;;
     blackhole)
       printf '127.0.0.1:9'
@@ -153,17 +176,42 @@ default_backend_value() {
 }
 
 render_nginx_config() {
-  local nginx_public_listen static_host static_port static_domain static_cert static_key static_web_root
+  local nginx_public_listen
   nginx_public_listen="$(get_ingress_public_listen)"
-  static_host="$(read_yaml_required '.static_site.listen_host' 'static_site.listen_host')"
-  static_port="$(read_yaml_required '.static_site.listen_port' 'static_site.listen_port')"
-  static_domain="$(get_static_site_domain)"
-  static_cert="$(read_yaml_required '.static_site.cert_file' 'static_site.cert_file')"
-  static_key="$(read_yaml_required '.static_site.key_file' 'static_site.key_file')"
-  static_web_root="$(read_yaml_required '.static_site.web_root' 'static_site.web_root')"
+  local map_entries=""
+  local static_server_block=""
 
-  local map_entries
-  map_entries="        ${static_domain} ${static_host}:${static_port};"
+  if has_explicit_static_site; then
+    local static_host static_port static_domain static_cert static_key static_web_root
+    static_host="$(read_yaml_required '.static_site.listen_host' 'static_site.listen_host')"
+    static_port="$(read_yaml_required '.static_site.listen_port' 'static_site.listen_port')"
+    static_domain="$(read_yaml_required '.static_site.domain' 'static_site.domain')"
+    static_cert="$(read_yaml_required '.static_site.cert_file' 'static_site.cert_file')"
+    static_key="$(read_yaml_required '.static_site.key_file' 'static_site.key_file')"
+    static_web_root="$(read_yaml_required '.static_site.web_root' 'static_site.web_root')"
+    map_entries="        ${static_domain} ${static_host}:${static_port};"
+
+    static_server_block=$(cat <<BLOCK
+    server {
+        listen ${static_host}:${static_port} ssl;
+        server_name ${static_domain};
+
+        ssl_certificate ${static_cert};
+        ssl_certificate_key ${static_key};
+        ssl_session_cache shared:SSL:20m;
+        ssl_session_timeout 10m;
+        ssl_protocols TLSv1.2 TLSv1.3;
+
+        root ${static_web_root};
+        index index.html;
+
+        location / {
+            try_files \$uri \$uri/ /index.html;
+        }
+    }
+BLOCK
+)
+  fi
 
   local reality_count trojan_count i
   reality_count="$(yq e '(.reality_backends // []) | length' "$CONFIG_FILE")"
@@ -173,19 +221,25 @@ render_nginx_config() {
     local servername listen_port
     servername="$(read_yaml_required ".reality_backends[$i].servername" "reality_backends[$i].servername")"
     listen_port="$(read_yaml_required ".reality_backends[$i].listen_port" "reality_backends[$i].listen_port")"
-    map_entries+=$'\n'"        ${servername} 127.0.0.1:${listen_port};"
+    if [[ -n "$map_entries" ]]; then
+      map_entries+=$'\n'
+    fi
+    map_entries+="        ${servername} 127.0.0.1:${listen_port};"
   done
 
   for (( i = 0; i < trojan_count; i++ )); do
     local servername listen_port
     servername="$(read_yaml_required ".trojan_backends[$i].servername" "trojan_backends[$i].servername")"
     listen_port="$(read_yaml_required ".trojan_backends[$i].listen_port" "trojan_backends[$i].listen_port")"
-    map_entries+=$'\n'"        ${servername} 127.0.0.1:${listen_port};"
+    if [[ -n "$map_entries" ]]; then
+      map_entries+=$'\n'
+    fi
+    map_entries+="        ${servername} 127.0.0.1:${listen_port};"
   done
 
   local trojan_fallback_blocks=""
   for (( i = 0; i < trojan_count; i++ )); do
-    local enabled servername fallback_host fallback_port block
+    local enabled servername fallback_host fallback_port fallback_web_root block
     enabled="$(normalize_bool "$(read_yaml_optional ".trojan_backends[$i].fallback_site.enabled" 'false')" "trojan_backends[$i].fallback_site.enabled")"
     if ! is_true "$enabled"; then
       continue
@@ -194,13 +248,14 @@ render_nginx_config() {
     servername="$(read_yaml_required ".trojan_backends[$i].servername" "trojan_backends[$i].servername")"
     fallback_host="$(read_yaml_optional ".trojan_backends[$i].fallback_site.listen_host" '127.0.0.1')"
     fallback_port="$(read_yaml_optional ".trojan_backends[$i].fallback_site.listen_port" '37980')"
+    fallback_web_root="$(resolve_fallback_site_web_root "$i")"
 
     block=$(cat <<BLOCK
     server {
         listen ${fallback_host}:${fallback_port};
         server_name ${servername};
 
-        root ${static_web_root};
+        root ${fallback_web_root};
         index index.html;
 
         location / {
@@ -222,11 +277,7 @@ BLOCK
     '__MAP_ENTRIES__' "$map_entries" \
     '__DEFAULT_BACKEND__' "$(default_backend_value)" \
     '__NGINX_PUBLIC_LISTEN__' "$nginx_public_listen" \
-    '__STATIC_LISTEN__' "${static_host}:${static_port}" \
-    '__DEFAULT_STATIC_HTML_DOMAIN__' "$static_domain" \
-    '__STATIC_CERT_FILE__' "$static_cert" \
-    '__STATIC_KEY_FILE__' "$static_key" \
-    '__STATIC_WEB_ROOT__' "$static_web_root" \
+    '__STATIC_SERVER_BLOCK__' "$static_server_block" \
     '__TROJAN_FALLBACK_SERVER_BLOCK__' "$trojan_fallback_blocks"
 
   log_info "已生成 nginx 配置: ${GENERATED_DIR}/nginx.conf"

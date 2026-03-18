@@ -35,7 +35,7 @@ resolve_probe_ip() {
 
 check_static_site_http() {
   local domain public_port probe_ip
-  domain="$(get_static_site_domain)"
+  domain="$(get_effective_static_site_domain)"
   public_port="$(parse_public_port "$(get_ingress_public_listen)")"
   probe_ip="$(resolve_probe_ip)"
 

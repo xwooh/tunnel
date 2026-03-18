@@ -143,8 +143,107 @@ get_unknown_sni_action() {
   read_yaml_optional '.ingress.unknown_sni_action' 'reject'
 }
 
+has_explicit_static_site() {
+  local exists
+  exists="$(yq e -r '.static_site != null' "$CONFIG_FILE")"
+  [[ "$exists" == "true" ]]
+}
+
+find_first_enabled_fallback_trojan_index() {
+  local trojan_count i enabled
+  trojan_count="$(yq e '(.trojan_backends // []) | length' "$CONFIG_FILE")"
+
+  for (( i = 0; i < trojan_count; i++ )); do
+    enabled="$(read_yaml_optional ".trojan_backends[$i].fallback_site.enabled" 'false')"
+    if is_true "$enabled"; then
+      printf '%s' "$i"
+      return 0
+    fi
+  done
+
+  return 1
+}
+
+get_primary_fallback_trojan_index() {
+  local fallback_index
+  if fallback_index="$(find_first_enabled_fallback_trojan_index)"; then
+    printf '%s' "$fallback_index"
+    return 0
+  fi
+
+  die 'static_site 缺省时，至少需要一个启用 fallback_site 的 Trojan 后端'
+}
+
+get_primary_fallback_trojan_listen_port() {
+  local fallback_index
+  fallback_index="$(get_primary_fallback_trojan_index)"
+  read_yaml_required ".trojan_backends[$fallback_index].listen_port" "trojan_backends[$fallback_index].listen_port"
+}
+
+resolve_fallback_site_web_root() {
+  local fallback_index="$1"
+  local value=""
+  value="$(read_yaml_optional ".trojan_backends[$fallback_index].fallback_site.web_root" '')"
+
+  if [[ -n "$value" && "$value" != "null" ]]; then
+    printf '%s' "$value"
+    return 0
+  fi
+
+  if has_explicit_static_site; then
+    read_yaml_required '.static_site.web_root' 'static_site.web_root'
+    return 0
+  fi
+
+  die "缺少必填字段: trojan_backends[$fallback_index].fallback_site.web_root"
+}
+
+get_effective_static_site_domain() {
+  if has_explicit_static_site; then
+    read_yaml_required '.static_site.domain' 'static_site.domain'
+    return 0
+  fi
+
+  local fallback_index
+  fallback_index="$(get_primary_fallback_trojan_index)"
+  read_yaml_required ".trojan_backends[$fallback_index].servername" "trojan_backends[$fallback_index].servername"
+}
+
+get_effective_static_site_cert_file() {
+  if has_explicit_static_site; then
+    read_yaml_required '.static_site.cert_file' 'static_site.cert_file'
+    return 0
+  fi
+
+  local fallback_index
+  fallback_index="$(get_primary_fallback_trojan_index)"
+  read_yaml_required ".trojan_backends[$fallback_index].tls_cert_file" "trojan_backends[$fallback_index].tls_cert_file"
+}
+
+get_effective_static_site_key_file() {
+  if has_explicit_static_site; then
+    read_yaml_required '.static_site.key_file' 'static_site.key_file'
+    return 0
+  fi
+
+  local fallback_index
+  fallback_index="$(get_primary_fallback_trojan_index)"
+  read_yaml_required ".trojan_backends[$fallback_index].tls_key_file" "trojan_backends[$fallback_index].tls_key_file"
+}
+
+get_effective_static_site_web_root() {
+  if has_explicit_static_site; then
+    read_yaml_required '.static_site.web_root' 'static_site.web_root'
+    return 0
+  fi
+
+  local fallback_index
+  fallback_index="$(get_primary_fallback_trojan_index)"
+  resolve_fallback_site_web_root "$fallback_index"
+}
+
 get_static_site_domain() {
-  read_yaml_required '.static_site.domain' 'static_site.domain'
+  get_effective_static_site_domain
 }
 
 get_socks_proxy_port() {
