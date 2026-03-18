@@ -149,6 +149,14 @@ has_explicit_static_site() {
   [[ "$exists" == "true" ]]
 }
 
+has_effective_static_site() {
+  if has_explicit_static_site; then
+    return 0
+  fi
+
+  find_first_enabled_fallback_trojan_index >/dev/null 2>&1
+}
+
 find_first_enabled_fallback_trojan_index() {
   local trojan_count i enabled
   trojan_count="$(yq e '(.trojan_backends // []) | length' "$CONFIG_FILE")"

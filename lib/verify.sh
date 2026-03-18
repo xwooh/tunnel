@@ -54,6 +54,11 @@ check_sni_handshake() {
   bash -c "echo | openssl s_client -connect '${probe_ip}:${public_port}' -servername '${servername}' -brief >/dev/null 2>&1"
 }
 
+check_listener_port() {
+  local port="$1"
+  ss -ltn | grep -qE "[:.]${port}[[:space:]]"
+}
+
 check_socks_listener_if_needed() {
   local socks_needed="false"
   local reality_count trojan_count i
@@ -83,19 +88,30 @@ check_socks_listener_if_needed() {
   local socks_port
   socks_port="$(get_socks_proxy_port)"
 
-  ss -ltn | grep -qE "[:.]${socks_port}[[:space:]]"
+  check_listener_port "$socks_port"
+}
+
+check_socks5_backend_listener() {
+  local listen_port="$1"
+  check_listener_port "$listen_port"
 }
 
 run_verify_stage() {
   require_cmd yq
   require_cmd openssl
   require_cmd curl
+  require_cmd ss
 
-  run_check '静态域名 HTTPS 响应' check_static_site_http
+  if has_effective_static_site; then
+    run_check '静态域名 HTTPS 响应' check_static_site_http
+  else
+    log_info '跳过静态域名 HTTPS 响应检查：当前未配置静态站'
+  fi
 
-  local reality_count trojan_count i servername
+  local reality_count trojan_count socks5_count i servername
   reality_count="$(yq e '(.reality_backends // []) | length' "$CONFIG_FILE")"
   trojan_count="$(yq e '(.trojan_backends // []) | length' "$CONFIG_FILE")"
+  socks5_count="$(yq e '(.socks5_backends // []) | length' "$CONFIG_FILE")"
 
   for (( i = 0; i < reality_count; i++ )); do
     servername="$(read_yaml_required ".reality_backends[$i].servername" "reality_backends[$i].servername")"
@@ -105,6 +121,13 @@ run_verify_stage() {
   for (( i = 0; i < trojan_count; i++ )); do
     servername="$(read_yaml_required ".trojan_backends[$i].servername" "trojan_backends[$i].servername")"
     run_check "Trojan SNI 握手 ${servername}" check_sni_handshake "$servername"
+  done
+
+  for (( i = 0; i < socks5_count; i++ )); do
+    local name listen_port
+    name="$(read_yaml_required ".socks5_backends[$i].name" "socks5_backends[$i].name")"
+    listen_port="$(read_yaml_required ".socks5_backends[$i].listen_port" "socks5_backends[$i].listen_port")"
+    run_check "SOCKS5 监听 ${name}" check_socks5_backend_listener "$listen_port"
   done
 
   run_check 'SOCKS 监听检查（启用 use_socks 时）' check_socks_listener_if_needed

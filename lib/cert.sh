@@ -9,12 +9,14 @@ acme_bin() {
 }
 
 collect_cert_triplets() {
-  local static_domain static_cert static_key
-  static_domain="$(get_effective_static_site_domain)"
-  static_cert="$(get_effective_static_site_cert_file)"
-  static_key="$(get_effective_static_site_key_file)"
+  if has_effective_static_site; then
+    local static_domain static_cert static_key
+    static_domain="$(get_effective_static_site_domain)"
+    static_cert="$(get_effective_static_site_cert_file)"
+    static_key="$(get_effective_static_site_key_file)"
 
-  printf '%s|%s|%s\n' "$static_domain" "$static_cert" "$static_key"
+    printf '%s|%s|%s\n' "$static_domain" "$static_cert" "$static_key"
+  fi
 
   local trojan_count
   trojan_count="$(yq e '(.trojan_backends // []) | length' "$CONFIG_FILE")"
@@ -63,14 +65,19 @@ run_cert_stage() {
 
   require_cmd yq
 
+  local triplets
+  triplets="$(collect_cert_triplets | awk '!seen[$0]++')"
+
+  if [[ -z "$triplets" ]]; then
+    log_info '当前配置不需要签发证书，跳过证书阶段'
+    return 0
+  fi
+
   [[ -n "${CF_Token:-}" ]] || die "缺少 CF_Token"
   [[ -n "${CF_Zone_ID:-}" ]] || die "缺少 CF_Zone_ID"
 
   export CF_Token
   export CF_Zone_ID
-
-  local triplets
-  triplets="$(collect_cert_triplets | awk '!seen[$0]++')"
 
   while IFS='|' read -r domain cert_file key_file; do
     [[ -n "$domain" ]] || continue

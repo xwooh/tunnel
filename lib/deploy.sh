@@ -88,7 +88,9 @@ append_unique_line() {
 
 collect_static_web_roots() {
   local web_roots=""
-  append_unique_line web_roots "$(get_effective_static_site_web_root)"
+  if has_effective_static_site; then
+    append_unique_line web_roots "$(get_effective_static_site_web_root)"
+  fi
 
   local trojan_count i enabled web_root
   trojan_count="$(yq e '(.trojan_backends // []) | length' "$CONFIG_FILE")"

@@ -29,18 +29,14 @@ validate_unique_bindings() {
     static_domain="$(read_yaml_required '.static_site.domain' 'static_site.domain')"
     static_port="$(read_yaml_required '.static_site.listen_port' 'static_site.listen_port')"
     assert_port "$static_port" 'static_site.listen_port'
-  else
-    get_effective_static_site_domain >/dev/null
-    get_effective_static_site_web_root >/dev/null
-    get_effective_static_site_cert_file >/dev/null
-    get_effective_static_site_key_file >/dev/null
   fi
 
-  local reality_count trojan_count
+  local reality_count trojan_count socks5_count
   reality_count="$(yq e '(.reality_backends // []) | length' "$CONFIG_FILE")"
   trojan_count="$(yq e '(.trojan_backends // []) | length' "$CONFIG_FILE")"
-  if (( reality_count + trojan_count == 0 )); then
-    die 'reality_backends 或 trojan_backends 至少需要配置一个后端'
+  socks5_count="$(yq e '(.socks5_backends // []) | length' "$CONFIG_FILE")"
+  if (( reality_count + trojan_count + socks5_count == 0 )); then
+    die 'reality_backends、trojan_backends 或 socks5_backends 至少需要配置一个后端'
   fi
 
   local unknown_sni_action
@@ -52,6 +48,10 @@ validate_unique_bindings() {
       die 'ingress.unknown_sni_action 只能是: reject, blackhole, fallback_static'
       ;;
   esac
+
+  if [[ "$unknown_sni_action" == "fallback_static" ]] && ! has_effective_static_site; then
+    die 'ingress.unknown_sni_action=fallback_static 时，必须配置 static_site 或启用 fallback_site 的 Trojan 后端'
+  fi
 
   # Bash 3 on macOS does not support associative arrays; keep a simple
   # tab-separated key/value table to track duplicate bindings.
@@ -145,6 +145,19 @@ validate_unique_bindings() {
       fi
       add_seen_binding seen_ports "$fallback_port" "${where}.fallback_site.listen_port"
     fi
+  done
+
+  for (( i = 0; i < socks5_count; i++ )); do
+    local where listen_port duplicated_listen_port
+    where="socks5_backends[$i]"
+    listen_port="$(read_yaml_required ".socks5_backends[$i].listen_port" "${where}.listen_port")"
+    assert_port "$listen_port" "${where}.listen_port"
+
+    duplicated_listen_port="$(lookup_seen_binding "$seen_ports" "$listen_port")"
+    if [[ -n "$duplicated_listen_port" ]]; then
+      die "${where} 的 listen_port 重复: ${listen_port}，已被 ${duplicated_listen_port} 使用"
+    fi
+    add_seen_binding seen_ports "$listen_port" "$where"
   done
 }
 
@@ -291,9 +304,10 @@ render_sing_box_config() {
   local inbounds_json='[]'
   local socks_route_inbounds='[]'
 
-  local reality_count trojan_count i
+  local reality_count trojan_count socks5_count i
   reality_count="$(yq e '(.reality_backends // []) | length' "$CONFIG_FILE")"
   trojan_count="$(yq e '(.trojan_backends // []) | length' "$CONFIG_FILE")"
+  socks5_count="$(yq e '(.socks5_backends // []) | length' "$CONFIG_FILE")"
 
   for (( i = 0; i < reality_count; i++ )); do
     local name safe_name inbound_tag user_name short_id_raw short_id_list
@@ -451,6 +465,45 @@ render_sing_box_config() {
     fi
   done
 
+  local socks5_offset
+  socks5_offset=$((reality_count + trojan_count))
+
+  for (( i = 0; i < socks5_count; i++ )); do
+    local idx name safe_name inbound_tag username password listen_port
+
+    idx=$((socks5_offset + i + 1))
+    name="$(read_yaml_required ".socks5_backends[$i].name" "socks5_backends[$i].name")"
+    safe_name="$(sanitize_name "$name")"
+    [[ -n "$safe_name" ]] || safe_name="backend-${idx}"
+
+    inbound_tag="${safe_name}-socks5-in"
+    username="$(read_yaml_required ".socks5_backends[$i].username" "socks5_backends[$i].username")"
+    password="$(read_yaml_required ".socks5_backends[$i].password" "socks5_backends[$i].password")"
+    listen_port="$(read_yaml_required ".socks5_backends[$i].listen_port" "socks5_backends[$i].listen_port")"
+    assert_port "$listen_port" "socks5_backends[$i].listen_port"
+
+    local inbound_obj
+    inbound_obj="$(jq -n \
+      --arg tag "$inbound_tag" \
+      --arg username "$username" \
+      --arg password "$password" \
+      --argjson listen_port "$listen_port" \
+      '{
+        type: "socks",
+        tag: $tag,
+        listen: "0.0.0.0",
+        listen_port: $listen_port,
+        users: [
+          {
+            username: $username,
+            password: $password
+          }
+        ]
+      }')"
+
+    inbounds_json="$(jq -c --argjson obj "$inbound_obj" '. + [$obj]' <<< "$inbounds_json")"
+  done
+
   local outbounds_json route_rules_json
   outbounds_json="$(jq -n --argjson socks_port "$socks_proxy_port" '[
     {
@@ -494,9 +547,10 @@ render_mihomo_config() {
 
   local proxies_json='[]'
 
-  local reality_count trojan_count i
+  local reality_count trojan_count socks5_count i
   reality_count="$(yq e '(.reality_backends // []) | length' "$CONFIG_FILE")"
   trojan_count="$(yq e '(.trojan_backends // []) | length' "$CONFIG_FILE")"
+  socks5_count="$(yq e '(.socks5_backends // []) | length' "$CONFIG_FILE")"
 
   for (( i = 0; i < reality_count; i++ )); do
     local name server uuid servername public_key short_id_raw short_id_first
@@ -584,6 +638,36 @@ render_mihomo_config() {
         udp: true,
         sni: $servername,
         "skip-cert-verify": $skip_cert_verify
+      }')"
+
+    proxies_json="$(jq -c --argjson obj "$proxy_obj" '. + [$obj]' <<< "$proxies_json")"
+  done
+
+  for (( i = 0; i < socks5_count; i++ )); do
+    local name server username password listen_port
+
+    name="$(read_yaml_required ".socks5_backends[$i].name" "socks5_backends[$i].name")"
+    server="$(read_yaml_required ".socks5_backends[$i].server" "socks5_backends[$i].server")"
+    username="$(read_yaml_required ".socks5_backends[$i].username" "socks5_backends[$i].username")"
+    password="$(read_yaml_required ".socks5_backends[$i].password" "socks5_backends[$i].password")"
+    listen_port="$(read_yaml_required ".socks5_backends[$i].listen_port" "socks5_backends[$i].listen_port")"
+    assert_port "$listen_port" "socks5_backends[$i].listen_port"
+
+    local proxy_obj
+    proxy_obj="$(jq -n \
+      --arg name "$name" \
+      --arg server "$server" \
+      --arg username "$username" \
+      --arg password "$password" \
+      --argjson port "$listen_port" \
+      '{
+        name: $name,
+        type: "socks5",
+        server: $server,
+        port: $port,
+        username: $username,
+        password: $password,
+        udp: true
       }')"
 
     proxies_json="$(jq -c --argjson obj "$proxy_obj" '. + [$obj]' <<< "$proxies_json")"

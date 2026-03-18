@@ -55,3 +55,10 @@ trojan_backends:
       listen_host: 127.0.0.1
       listen_port: 37970
       web_root: /var/www/html
+
+socks5_backends:
+  - name: S1
+    listen_port: 1080
+    server: proxy.example.com
+    username: socks_user
+    password: socks_password
