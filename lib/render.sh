@@ -18,45 +18,60 @@ normalize_bool() {
   die "${where} 必须是布尔值"
 }
 
+build_outbounds_json() {
+  local outbounds_json
+  outbounds_json="$(jq -n '[
+    {
+      type: "direct",
+      tag: "direct-out"
+    }
+  ]')"
+
+  local egress_name egress_type outbound_obj
+  while IFS= read -r egress_name; do
+    [[ -n "$egress_name" ]] || continue
+
+    egress_type="$(get_egress_type "$egress_name")"
+    case "$egress_type" in
+      direct)
+        continue
+        ;;
+      socks)
+        local server port
+        server="$(read_named_egress_required "$egress_name" 'server' "egress.${egress_name}.server")"
+        port="$(read_named_egress_required "$egress_name" 'port' "egress.${egress_name}.port")"
+        assert_port "$port" "egress.${egress_name}.port"
+
+        outbound_obj="$(jq -n \
+          --arg tag "$(egress_outbound_tag "$egress_name")" \
+          --arg server "$server" \
+          --argjson port "$port" \
+          '{
+            type: "socks",
+            tag: $tag,
+            server: $server,
+            server_port: $port
+          }')"
+        ;;
+      *)
+        die "egress.${egress_name}.type 只能是: direct, socks"
+        ;;
+    esac
+
+    outbounds_json="$(jq -c --argjson obj "$outbound_obj" '. + [$obj]' <<< "$outbounds_json")"
+  done < <(list_egress_names)
+
+  printf '%s' "$outbounds_json"
+}
+
 validate_unique_bindings() {
-  local socks_proxy_port
-  socks_proxy_port="$(get_socks_proxy_port)"
-
-  assert_port "$socks_proxy_port" 'egress.socks_proxy.port'
-
-  if has_explicit_static_site; then
-    local static_domain static_port
-    static_domain="$(read_yaml_required '.static_site.domain' 'static_site.domain')"
-    static_port="$(read_yaml_required '.static_site.listen_port' 'static_site.listen_port')"
-    assert_port "$static_port" 'static_site.listen_port'
+  if ! has_ingress && ! has_sing_box; then
+    die 'ingress 或 sing_box 至少需要配置一个顶层块'
   fi
 
-  local reality_count trojan_count socks5_count
-  reality_count="$(yq e '(.reality_backends // []) | length' "$CONFIG_FILE")"
-  trojan_count="$(yq e '(.trojan_backends // []) | length' "$CONFIG_FILE")"
-  socks5_count="$(yq e '(.socks5_backends // []) | length' "$CONFIG_FILE")"
-  if (( reality_count + trojan_count + socks5_count == 0 )); then
-    die 'reality_backends、trojan_backends 或 socks5_backends 至少需要配置一个后端'
-  fi
-
-  local unknown_sni_action
-  unknown_sni_action="$(lower "$(get_unknown_sni_action)")"
-  case "$unknown_sni_action" in
-    reject|blackhole|fallback_static)
-      ;;
-    *)
-      die 'ingress.unknown_sni_action 只能是: reject, blackhole, fallback_static'
-      ;;
-  esac
-
-  if [[ "$unknown_sni_action" == "fallback_static" ]] && ! has_effective_static_site; then
-    die 'ingress.unknown_sni_action=fallback_static 时，必须配置 static_site 或启用 fallback_site 的 Trojan 后端'
-  fi
-
-  # Bash 3 on macOS does not support associative arrays; keep a simple
-  # tab-separated key/value table to track duplicate bindings.
   local seen_servernames=''
   local seen_ports=''
+  local seen_outbound_tags=''
 
   lookup_seen_binding() {
     local table="$1"
@@ -76,30 +91,106 @@ validate_unique_bindings() {
     printf -v "$var_name" '%s' "$table"
   }
 
-  if has_explicit_static_site; then
-    local static_domain static_port
-    static_domain="$(read_yaml_required '.static_site.domain' 'static_site.domain')"
-    static_port="$(read_yaml_required '.static_site.listen_port' 'static_site.listen_port')"
-    add_seen_binding seen_servernames "$static_domain" 'static_site.domain'
-    add_seen_binding seen_ports "$static_port" 'static_site.listen_port'
+  local reality_count trojan_count socks5_count
+  reality_count="$(count_ingress_reality_backends)"
+  trojan_count="$(count_ingress_trojan_backends)"
+  socks5_count="$(count_sing_box_socks5_backends)"
+
+  if has_ingress; then
+    local public_listen public_port unknown_sni_action duplicated_port
+
+    public_listen="$(get_ingress_public_listen)"
+    public_port="$(parse_public_port "$public_listen")"
+    duplicated_port="$(lookup_seen_binding "$seen_ports" "$public_port")"
+    if [[ -n "$duplicated_port" ]]; then
+      die "ingress.public_listen 端口冲突: ${public_port}，已被 ${duplicated_port} 使用"
+    fi
+    add_seen_binding seen_ports "$public_port" 'ingress.public_listen'
+
+    unknown_sni_action="$(lower "$(get_unknown_sni_action)")"
+    case "$unknown_sni_action" in
+      reject|blackhole|fallback_static)
+        ;;
+      *)
+        die 'ingress.unknown_sni_action 只能是: reject, blackhole, fallback_static'
+        ;;
+    esac
+
+    if [[ "$unknown_sni_action" == "fallback_static" ]] && ! has_effective_static_site; then
+      die 'ingress.unknown_sni_action=fallback_static 时，必须配置 ingress.static_site 或启用 fallback_site 的 Trojan 后端'
+    fi
+
+    if has_explicit_static_site; then
+      local static_domain static_port duplicated_servername
+      static_domain="$(read_yaml_required '.ingress.static_site.domain' 'ingress.static_site.domain')"
+      static_port="$(read_yaml_required '.ingress.static_site.listen_port' 'ingress.static_site.listen_port')"
+      assert_port "$static_port" 'ingress.static_site.listen_port'
+
+      duplicated_servername="$(lookup_seen_binding "$seen_servernames" "$static_domain")"
+      if [[ -n "$duplicated_servername" ]]; then
+        die "ingress.static_site.domain 域名重复: ${static_domain}，已被 ${duplicated_servername} 使用"
+      fi
+      add_seen_binding seen_servernames "$static_domain" 'ingress.static_site.domain'
+
+      duplicated_port="$(lookup_seen_binding "$seen_ports" "$static_port")"
+      if [[ -n "$duplicated_port" ]]; then
+        die "ingress.static_site.listen_port 端口冲突: ${static_port}，已被 ${duplicated_port} 使用"
+      fi
+      add_seen_binding seen_ports "$static_port" 'ingress.static_site.listen_port'
+    fi
   fi
 
-  local duplicated_port
-  duplicated_port="$(lookup_seen_binding "$seen_ports" "$socks_proxy_port")"
-  if [[ -n "$duplicated_port" ]]; then
-    die "egress.socks_proxy.port 端口冲突: ${socks_proxy_port}，已被 ${duplicated_port} 使用"
-  fi
-  add_seen_binding seen_ports "$socks_proxy_port" 'egress.socks_proxy.port'
+  local egress_name egress_type egress_port egress_server safe_name duplicated_outbound_tag duplicated_port
+  while IFS= read -r egress_name; do
+    [[ -n "$egress_name" ]] || continue
+
+    if [[ "$egress_name" == "direct" ]]; then
+      die 'egress.direct 是保留名称，不能显式定义'
+    fi
+
+    egress_type="$(get_egress_type "$egress_name")"
+    case "$egress_type" in
+      direct|socks)
+        ;;
+      *)
+        die "egress.${egress_name}.type 只能是: direct, socks"
+        ;;
+    esac
+
+    safe_name="$(sanitize_name "$egress_name")"
+    [[ -n "$safe_name" ]] || die "egress 名称不可用: ${egress_name}"
+    duplicated_outbound_tag="$(lookup_seen_binding "$seen_outbound_tags" "egress-${safe_name}-out")"
+    if [[ -n "$duplicated_outbound_tag" ]]; then
+      die "egress 名称冲突: ${egress_name} 与 ${duplicated_outbound_tag} 会生成相同的 outbound tag"
+    fi
+    add_seen_binding seen_outbound_tags "egress-${safe_name}-out" "egress.${egress_name}"
+
+    if [[ "$egress_type" != "socks" ]]; then
+      continue
+    fi
+
+    egress_server="$(read_named_egress_required "$egress_name" 'server' "egress.${egress_name}.server")"
+    egress_port="$(read_named_egress_required "$egress_name" 'port' "egress.${egress_name}.port")"
+    assert_port "$egress_port" "egress.${egress_name}.port"
+
+    if is_local_address "$egress_server"; then
+      duplicated_port="$(lookup_seen_binding "$seen_ports" "$egress_port")"
+      if [[ -n "$duplicated_port" ]]; then
+        die "egress.${egress_name}.port 端口冲突: ${egress_port}，已被 ${duplicated_port} 使用"
+      fi
+      add_seen_binding seen_ports "$egress_port" "egress.${egress_name}.port"
+    fi
+  done < <(list_egress_names)
 
   local i
   for (( i = 0; i < reality_count; i++ )); do
-    local where servername listen_port
-    where="reality_backends[$i]"
-    servername="$(read_yaml_required ".reality_backends[$i].servername" "${where}.servername")"
-    listen_port="$(read_yaml_required ".reality_backends[$i].listen_port" "${where}.listen_port")"
+    local where servername listen_port duplicated_servername duplicated_listen_port
+    where="ingress.reality_backends[$i]"
+    servername="$(read_yaml_required ".ingress.reality_backends[$i].servername" "${where}.servername")"
+    listen_port="$(read_yaml_required ".ingress.reality_backends[$i].listen_port" "${where}.listen_port")"
     assert_port "$listen_port" "${where}.listen_port"
+    resolve_backend_egress_name ".ingress.reality_backends[$i].egress" "${where}.egress" >/dev/null
 
-    local duplicated_servername duplicated_listen_port
     duplicated_servername="$(lookup_seen_binding "$seen_servernames" "$servername")"
     if [[ -n "$duplicated_servername" ]]; then
       die "${where} 的 SNI 域名重复: ${servername}，已被 ${duplicated_servername} 使用"
@@ -114,13 +205,13 @@ validate_unique_bindings() {
   done
 
   for (( i = 0; i < trojan_count; i++ )); do
-    local where servername listen_port fallback_enabled fallback_port
-    where="trojan_backends[$i]"
-    servername="$(read_yaml_required ".trojan_backends[$i].servername" "${where}.servername")"
-    listen_port="$(read_yaml_required ".trojan_backends[$i].listen_port" "${where}.listen_port")"
+    local where servername listen_port fallback_enabled fallback_port duplicated_servername duplicated_listen_port
+    where="ingress.trojan_backends[$i]"
+    servername="$(read_yaml_required ".ingress.trojan_backends[$i].servername" "${where}.servername")"
+    listen_port="$(read_yaml_required ".ingress.trojan_backends[$i].listen_port" "${where}.listen_port")"
     assert_port "$listen_port" "${where}.listen_port"
+    resolve_backend_egress_name ".ingress.trojan_backends[$i].egress" "${where}.egress" >/dev/null
 
-    local duplicated_servername duplicated_listen_port
     duplicated_servername="$(lookup_seen_binding "$seen_servernames" "$servername")"
     if [[ -n "$duplicated_servername" ]]; then
       die "${where} 的 SNI 域名重复: ${servername}，已被 ${duplicated_servername} 使用"
@@ -133,15 +224,15 @@ validate_unique_bindings() {
     fi
     add_seen_binding seen_ports "$listen_port" "$where"
 
-    fallback_enabled="$(normalize_bool "$(read_yaml_optional ".trojan_backends[$i].fallback_site.enabled" 'false')" "${where}.fallback_site.enabled")"
+    fallback_enabled="$(normalize_bool "$(read_yaml_optional ".ingress.trojan_backends[$i].fallback_site.enabled" 'false')" "${where}.fallback_site.enabled")"
     if is_true "$fallback_enabled"; then
       resolve_fallback_site_web_root "$i" >/dev/null
-      fallback_port="$(read_yaml_optional ".trojan_backends[$i].fallback_site.listen_port" '37980')"
+      fallback_port="$(read_yaml_optional ".ingress.trojan_backends[$i].fallback_site.listen_port" '37980')"
       assert_port "$fallback_port" "${where}.fallback_site.listen_port"
-      local duplicated_fallback_port
-      duplicated_fallback_port="$(lookup_seen_binding "$seen_ports" "$fallback_port")"
-      if [[ -n "$duplicated_fallback_port" ]]; then
-        die "${where}.fallback_site.listen_port 端口重复: ${fallback_port}，已被 ${duplicated_fallback_port} 使用"
+
+      duplicated_listen_port="$(lookup_seen_binding "$seen_ports" "$fallback_port")"
+      if [[ -n "$duplicated_listen_port" ]]; then
+        die "${where}.fallback_site.listen_port 端口重复: ${fallback_port}，已被 ${duplicated_listen_port} 使用"
       fi
       add_seen_binding seen_ports "$fallback_port" "${where}.fallback_site.listen_port"
     fi
@@ -149,9 +240,10 @@ validate_unique_bindings() {
 
   for (( i = 0; i < socks5_count; i++ )); do
     local where listen_port duplicated_listen_port
-    where="socks5_backends[$i]"
-    listen_port="$(read_yaml_required ".socks5_backends[$i].listen_port" "${where}.listen_port")"
+    where="sing_box.socks5_backends[$i]"
+    listen_port="$(read_yaml_required ".sing_box.socks5_backends[$i].listen_port" "${where}.listen_port")"
     assert_port "$listen_port" "${where}.listen_port"
+    resolve_backend_egress_name ".sing_box.socks5_backends[$i].egress" "${where}.egress" >/dev/null
 
     duplicated_listen_port="$(lookup_seen_binding "$seen_ports" "$listen_port")"
     if [[ -n "$duplicated_listen_port" ]]; then
@@ -169,13 +261,14 @@ default_backend_value() {
     fallback_static)
       if has_explicit_static_site; then
         local static_host static_port
-        static_host="$(read_yaml_required '.static_site.listen_host' 'static_site.listen_host')"
-        static_port="$(read_yaml_required '.static_site.listen_port' 'static_site.listen_port')"
+        static_host="$(read_yaml_required '.ingress.static_site.listen_host' 'ingress.static_site.listen_host')"
+        static_port="$(read_yaml_required '.ingress.static_site.listen_port' 'ingress.static_site.listen_port')"
         printf '%s:%s' "$static_host" "$static_port"
       else
-        local trojan_listen_port
+        local trojan_listen_port fallback_index
+        fallback_index="$(get_primary_fallback_trojan_index)"
         trojan_listen_port="$(get_primary_fallback_trojan_listen_port)"
-        assert_port "$trojan_listen_port" "trojan_backends[$(get_primary_fallback_trojan_index)].listen_port"
+        assert_port "$trojan_listen_port" "ingress.trojan_backends[${fallback_index}].listen_port"
         printf '127.0.0.1:%s' "$trojan_listen_port"
       fi
       ;;
@@ -191,17 +284,18 @@ default_backend_value() {
 render_nginx_config() {
   local nginx_public_listen
   nginx_public_listen="$(get_ingress_public_listen)"
+
   local map_entries=""
   local static_server_block=""
 
   if has_explicit_static_site; then
     local static_host static_port static_domain static_cert static_key static_web_root
-    static_host="$(read_yaml_required '.static_site.listen_host' 'static_site.listen_host')"
-    static_port="$(read_yaml_required '.static_site.listen_port' 'static_site.listen_port')"
-    static_domain="$(read_yaml_required '.static_site.domain' 'static_site.domain')"
-    static_cert="$(read_yaml_required '.static_site.cert_file' 'static_site.cert_file')"
-    static_key="$(read_yaml_required '.static_site.key_file' 'static_site.key_file')"
-    static_web_root="$(read_yaml_required '.static_site.web_root' 'static_site.web_root')"
+    static_host="$(read_yaml_required '.ingress.static_site.listen_host' 'ingress.static_site.listen_host')"
+    static_port="$(read_yaml_required '.ingress.static_site.listen_port' 'ingress.static_site.listen_port')"
+    static_domain="$(read_yaml_required '.ingress.static_site.domain' 'ingress.static_site.domain')"
+    static_cert="$(read_yaml_required '.ingress.static_site.cert_file' 'ingress.static_site.cert_file')"
+    static_key="$(read_yaml_required '.ingress.static_site.key_file' 'ingress.static_site.key_file')"
+    static_web_root="$(read_yaml_required '.ingress.static_site.web_root' 'ingress.static_site.web_root')"
     map_entries="        ${static_domain} ${static_host}:${static_port};"
 
     static_server_block=$(cat <<BLOCK
@@ -227,13 +321,13 @@ BLOCK
   fi
 
   local reality_count trojan_count i
-  reality_count="$(yq e '(.reality_backends // []) | length' "$CONFIG_FILE")"
-  trojan_count="$(yq e '(.trojan_backends // []) | length' "$CONFIG_FILE")"
+  reality_count="$(count_ingress_reality_backends)"
+  trojan_count="$(count_ingress_trojan_backends)"
 
   for (( i = 0; i < reality_count; i++ )); do
     local servername listen_port
-    servername="$(read_yaml_required ".reality_backends[$i].servername" "reality_backends[$i].servername")"
-    listen_port="$(read_yaml_required ".reality_backends[$i].listen_port" "reality_backends[$i].listen_port")"
+    servername="$(read_yaml_required ".ingress.reality_backends[$i].servername" "ingress.reality_backends[$i].servername")"
+    listen_port="$(read_yaml_required ".ingress.reality_backends[$i].listen_port" "ingress.reality_backends[$i].listen_port")"
     if [[ -n "$map_entries" ]]; then
       map_entries+=$'\n'
     fi
@@ -242,8 +336,8 @@ BLOCK
 
   for (( i = 0; i < trojan_count; i++ )); do
     local servername listen_port
-    servername="$(read_yaml_required ".trojan_backends[$i].servername" "trojan_backends[$i].servername")"
-    listen_port="$(read_yaml_required ".trojan_backends[$i].listen_port" "trojan_backends[$i].listen_port")"
+    servername="$(read_yaml_required ".ingress.trojan_backends[$i].servername" "ingress.trojan_backends[$i].servername")"
+    listen_port="$(read_yaml_required ".ingress.trojan_backends[$i].listen_port" "ingress.trojan_backends[$i].listen_port")"
     if [[ -n "$map_entries" ]]; then
       map_entries+=$'\n'
     fi
@@ -253,14 +347,14 @@ BLOCK
   local trojan_fallback_blocks=""
   for (( i = 0; i < trojan_count; i++ )); do
     local enabled servername fallback_host fallback_port fallback_web_root block
-    enabled="$(normalize_bool "$(read_yaml_optional ".trojan_backends[$i].fallback_site.enabled" 'false')" "trojan_backends[$i].fallback_site.enabled")"
+    enabled="$(normalize_bool "$(read_yaml_optional ".ingress.trojan_backends[$i].fallback_site.enabled" 'false')" "ingress.trojan_backends[$i].fallback_site.enabled")"
     if ! is_true "$enabled"; then
       continue
     fi
 
-    servername="$(read_yaml_required ".trojan_backends[$i].servername" "trojan_backends[$i].servername")"
-    fallback_host="$(read_yaml_optional ".trojan_backends[$i].fallback_site.listen_host" '127.0.0.1')"
-    fallback_port="$(read_yaml_optional ".trojan_backends[$i].fallback_site.listen_port" '37980')"
+    servername="$(read_yaml_required ".ingress.trojan_backends[$i].servername" "ingress.trojan_backends[$i].servername")"
+    fallback_host="$(read_yaml_optional ".ingress.trojan_backends[$i].fallback_site.listen_host" '127.0.0.1')"
+    fallback_port="$(read_yaml_optional ".ingress.trojan_backends[$i].fallback_site.listen_port" '37980')"
     fallback_web_root="$(resolve_fallback_site_web_root "$i")"
 
     block=$(cat <<BLOCK
@@ -297,41 +391,37 @@ BLOCK
 }
 
 render_sing_box_config() {
-  local socks_proxy_port
-  socks_proxy_port="$(get_socks_proxy_port)"
-  assert_port "$socks_proxy_port" 'egress.socks_proxy.port'
-
   local inbounds_json='[]'
-  local socks_route_inbounds='[]'
+  local route_rules_json='[]'
 
   local reality_count trojan_count socks5_count i
-  reality_count="$(yq e '(.reality_backends // []) | length' "$CONFIG_FILE")"
-  trojan_count="$(yq e '(.trojan_backends // []) | length' "$CONFIG_FILE")"
-  socks5_count="$(yq e '(.socks5_backends // []) | length' "$CONFIG_FILE")"
+  reality_count="$(count_ingress_reality_backends)"
+  trojan_count="$(count_ingress_trojan_backends)"
+  socks5_count="$(count_sing_box_socks5_backends)"
 
   for (( i = 0; i < reality_count; i++ )); do
     local name safe_name inbound_tag user_name short_id_raw short_id_list
-    local listen_port user_uuid servername handshake_server handshake_port private_key use_socks
+    local listen_port user_uuid servername handshake_server handshake_port private_key egress_name outbound_tag
 
-    name="$(read_yaml_required ".reality_backends[$i].name" "reality_backends[$i].name")"
+    name="$(read_yaml_required ".ingress.reality_backends[$i].name" "ingress.reality_backends[$i].name")"
     safe_name="$(sanitize_name "$name")"
     [[ -n "$safe_name" ]] || safe_name="backend-$((i + 1))"
 
     inbound_tag="${safe_name}-vless-in"
     user_name="${safe_name}-vless-user"
 
-    listen_port="$(read_yaml_required ".reality_backends[$i].listen_port" "reality_backends[$i].listen_port")"
-    user_uuid="$(read_yaml_required ".reality_backends[$i].user_uuid" "reality_backends[$i].user_uuid")"
-    servername="$(read_yaml_required ".reality_backends[$i].servername" "reality_backends[$i].servername")"
-    handshake_server="$(read_yaml_required ".reality_backends[$i].handshake_server" "reality_backends[$i].handshake_server")"
-    handshake_port="$(read_yaml_required ".reality_backends[$i].port" "reality_backends[$i].port")"
-    private_key="$(read_yaml_required ".reality_backends[$i].private_key" "reality_backends[$i].private_key")"
-    use_socks="$(normalize_bool "$(read_yaml_optional ".reality_backends[$i].use_socks" 'false')" "reality_backends[$i].use_socks")"
+    listen_port="$(read_yaml_required ".ingress.reality_backends[$i].listen_port" "ingress.reality_backends[$i].listen_port")"
+    user_uuid="$(read_yaml_required ".ingress.reality_backends[$i].user_uuid" "ingress.reality_backends[$i].user_uuid")"
+    servername="$(read_yaml_required ".ingress.reality_backends[$i].servername" "ingress.reality_backends[$i].servername")"
+    handshake_server="$(read_yaml_required ".ingress.reality_backends[$i].handshake_server" "ingress.reality_backends[$i].handshake_server")"
+    handshake_port="$(read_yaml_required ".ingress.reality_backends[$i].port" "ingress.reality_backends[$i].port")"
+    private_key="$(read_yaml_required ".ingress.reality_backends[$i].private_key" "ingress.reality_backends[$i].private_key")"
+    egress_name="$(resolve_backend_egress_name ".ingress.reality_backends[$i].egress" "ingress.reality_backends[$i].egress")"
 
-    assert_port "$listen_port" "reality_backends[$i].listen_port"
-    assert_port "$handshake_port" "reality_backends[$i].port"
+    assert_port "$listen_port" "ingress.reality_backends[$i].listen_port"
+    assert_port "$handshake_port" "ingress.reality_backends[$i].port"
 
-    short_id_raw="$(yq e -o=json ".reality_backends[$i].short_id" "$CONFIG_FILE")"
+    short_id_raw="$(yq e -o=json ".ingress.reality_backends[$i].short_id" "$CONFIG_FILE")"
     short_id_list="$(jq -c '
       if type == "array" then
         [ .[] | tostring | select(length > 0) ]
@@ -343,7 +433,7 @@ render_sing_box_config() {
     ' <<< "$short_id_raw")"
 
     if [[ "$(jq 'length' <<< "$short_id_list")" -eq 0 ]]; then
-      die "reality_backends[$i].short_id 不能为空"
+      die "ingress.reality_backends[$i].short_id 不能为空"
     fi
 
     local inbound_obj
@@ -386,8 +476,12 @@ render_sing_box_config() {
 
     inbounds_json="$(jq -c --argjson obj "$inbound_obj" '. + [$obj]' <<< "$inbounds_json")"
 
-    if is_true "$use_socks"; then
-      socks_route_inbounds="$(jq -c --arg tag "$inbound_tag" '. + [$tag]' <<< "$socks_route_inbounds")"
+    outbound_tag="$(egress_outbound_tag "$egress_name")"
+    if [[ "$outbound_tag" != "direct-out" ]]; then
+      route_rules_json="$(jq -c --arg inbound "$inbound_tag" --arg outbound "$outbound_tag" '. + [{
+        inbound: [$inbound],
+        outbound: $outbound
+      }]' <<< "$route_rules_json")"
     fi
   done
 
@@ -396,25 +490,25 @@ render_sing_box_config() {
 
   for (( i = 0; i < trojan_count; i++ )); do
     local idx name safe_name inbound_tag user_name
-    local listen_port password servername cert_path key_path use_socks
+    local listen_port password servername cert_path key_path egress_name outbound_tag
     local fallback_enabled fallback_host fallback_port
 
     idx=$((trojan_offset + i + 1))
-    name="$(read_yaml_required ".trojan_backends[$i].name" "trojan_backends[$i].name")"
+    name="$(read_yaml_required ".ingress.trojan_backends[$i].name" "ingress.trojan_backends[$i].name")"
     safe_name="$(sanitize_name "$name")"
     [[ -n "$safe_name" ]] || safe_name="backend-${idx}"
 
     inbound_tag="${safe_name}-trojan-in"
     user_name="${safe_name}-trojan-user"
 
-    listen_port="$(read_yaml_required ".trojan_backends[$i].listen_port" "trojan_backends[$i].listen_port")"
-    password="$(read_yaml_required ".trojan_backends[$i].password" "trojan_backends[$i].password")"
-    servername="$(read_yaml_required ".trojan_backends[$i].servername" "trojan_backends[$i].servername")"
-    cert_path="$(read_yaml_required ".trojan_backends[$i].tls_cert_file" "trojan_backends[$i].tls_cert_file")"
-    key_path="$(read_yaml_required ".trojan_backends[$i].tls_key_file" "trojan_backends[$i].tls_key_file")"
-    use_socks="$(normalize_bool "$(read_yaml_optional ".trojan_backends[$i].use_socks" 'false')" "trojan_backends[$i].use_socks")"
+    listen_port="$(read_yaml_required ".ingress.trojan_backends[$i].listen_port" "ingress.trojan_backends[$i].listen_port")"
+    password="$(read_yaml_required ".ingress.trojan_backends[$i].password" "ingress.trojan_backends[$i].password")"
+    servername="$(read_yaml_required ".ingress.trojan_backends[$i].servername" "ingress.trojan_backends[$i].servername")"
+    cert_path="$(read_yaml_required ".ingress.trojan_backends[$i].tls_cert_file" "ingress.trojan_backends[$i].tls_cert_file")"
+    key_path="$(read_yaml_required ".ingress.trojan_backends[$i].tls_key_file" "ingress.trojan_backends[$i].tls_key_file")"
+    egress_name="$(resolve_backend_egress_name ".ingress.trojan_backends[$i].egress" "ingress.trojan_backends[$i].egress")"
 
-    assert_port "$listen_port" "trojan_backends[$i].listen_port"
+    assert_port "$listen_port" "ingress.trojan_backends[$i].listen_port"
 
     local inbound_obj
     inbound_obj="$(jq -n \
@@ -445,11 +539,11 @@ render_sing_box_config() {
         }
       }')"
 
-    fallback_enabled="$(normalize_bool "$(read_yaml_optional ".trojan_backends[$i].fallback_site.enabled" 'false')" "trojan_backends[$i].fallback_site.enabled")"
+    fallback_enabled="$(normalize_bool "$(read_yaml_optional ".ingress.trojan_backends[$i].fallback_site.enabled" 'false')" "ingress.trojan_backends[$i].fallback_site.enabled")"
     if is_true "$fallback_enabled"; then
-      fallback_host="$(read_yaml_optional ".trojan_backends[$i].fallback_site.listen_host" '127.0.0.1')"
-      fallback_port="$(read_yaml_optional ".trojan_backends[$i].fallback_site.listen_port" '37980')"
-      assert_port "$fallback_port" "trojan_backends[$i].fallback_site.listen_port"
+      fallback_host="$(read_yaml_optional ".ingress.trojan_backends[$i].fallback_site.listen_host" '127.0.0.1')"
+      fallback_port="$(read_yaml_optional ".ingress.trojan_backends[$i].fallback_site.listen_port" '37980')"
+      assert_port "$fallback_port" "ingress.trojan_backends[$i].fallback_site.listen_port"
       inbound_obj="$(jq -c --arg fallback_host "$fallback_host" --argjson fallback_port "$fallback_port" '. + {
         fallback: {
           server: $fallback_host,
@@ -460,8 +554,12 @@ render_sing_box_config() {
 
     inbounds_json="$(jq -c --argjson obj "$inbound_obj" '. + [$obj]' <<< "$inbounds_json")"
 
-    if is_true "$use_socks"; then
-      socks_route_inbounds="$(jq -c --arg tag "$inbound_tag" '. + [$tag]' <<< "$socks_route_inbounds")"
+    outbound_tag="$(egress_outbound_tag "$egress_name")"
+    if [[ "$outbound_tag" != "direct-out" ]]; then
+      route_rules_json="$(jq -c --arg inbound "$inbound_tag" --arg outbound "$outbound_tag" '. + [{
+        inbound: [$inbound],
+        outbound: $outbound
+      }]' <<< "$route_rules_json")"
     fi
   done
 
@@ -469,29 +567,32 @@ render_sing_box_config() {
   socks5_offset=$((reality_count + trojan_count))
 
   for (( i = 0; i < socks5_count; i++ )); do
-    local idx name safe_name inbound_tag username password listen_port
+    local idx name safe_name inbound_tag username password listen_host listen_port egress_name outbound_tag
 
     idx=$((socks5_offset + i + 1))
-    name="$(read_yaml_required ".socks5_backends[$i].name" "socks5_backends[$i].name")"
+    name="$(read_yaml_required ".sing_box.socks5_backends[$i].name" "sing_box.socks5_backends[$i].name")"
     safe_name="$(sanitize_name "$name")"
     [[ -n "$safe_name" ]] || safe_name="backend-${idx}"
 
     inbound_tag="${safe_name}-socks5-in"
-    username="$(read_yaml_required ".socks5_backends[$i].username" "socks5_backends[$i].username")"
-    password="$(read_yaml_required ".socks5_backends[$i].password" "socks5_backends[$i].password")"
-    listen_port="$(read_yaml_required ".socks5_backends[$i].listen_port" "socks5_backends[$i].listen_port")"
-    assert_port "$listen_port" "socks5_backends[$i].listen_port"
+    username="$(read_yaml_required ".sing_box.socks5_backends[$i].username" "sing_box.socks5_backends[$i].username")"
+    password="$(read_yaml_required ".sing_box.socks5_backends[$i].password" "sing_box.socks5_backends[$i].password")"
+    listen_host="$(read_yaml_optional ".sing_box.socks5_backends[$i].listen_host" '0.0.0.0')"
+    listen_port="$(read_yaml_required ".sing_box.socks5_backends[$i].listen_port" "sing_box.socks5_backends[$i].listen_port")"
+    egress_name="$(resolve_backend_egress_name ".sing_box.socks5_backends[$i].egress" "sing_box.socks5_backends[$i].egress")"
+    assert_port "$listen_port" "sing_box.socks5_backends[$i].listen_port"
 
     local inbound_obj
     inbound_obj="$(jq -n \
       --arg tag "$inbound_tag" \
       --arg username "$username" \
       --arg password "$password" \
+      --arg listen_host "$listen_host" \
       --argjson listen_port "$listen_port" \
       '{
         type: "socks",
         tag: $tag,
-        listen: "0.0.0.0",
+        listen: $listen_host,
         listen_port: $listen_port,
         users: [
           {
@@ -502,38 +603,21 @@ render_sing_box_config() {
       }')"
 
     inbounds_json="$(jq -c --argjson obj "$inbound_obj" '. + [$obj]' <<< "$inbounds_json")"
+
+    outbound_tag="$(egress_outbound_tag "$egress_name")"
+    if [[ "$outbound_tag" != "direct-out" ]]; then
+      route_rules_json="$(jq -c --arg inbound "$inbound_tag" --arg outbound "$outbound_tag" '. + [{
+        inbound: [$inbound],
+        outbound: $outbound
+      }]' <<< "$route_rules_json")"
+    fi
   done
-
-  local outbounds_json route_rules_json
-  outbounds_json="$(jq -n --argjson socks_port "$socks_proxy_port" '[
-    {
-      type: "socks",
-      tag: "local-socks-out",
-      server: "127.0.0.1",
-      server_port: $socks_port
-    },
-    {
-      type: "direct",
-      tag: "direct-out"
-    }
-  ]')"
-
-  if [[ "$(jq 'length' <<< "$socks_route_inbounds")" -gt 0 ]]; then
-    route_rules_json="$(jq -n --argjson inbound "$socks_route_inbounds" '[
-      {
-        inbound: $inbound,
-        outbound: "local-socks-out"
-      }
-    ]')"
-  else
-    route_rules_json='[]'
-  fi
 
   render_template_file \
     "${TEMPLATE_DIR}/sing-box.config.json.tpl" \
     "${GENERATED_DIR}/config.json" \
     '__INBOUNDS_JSON__' "$(jq '.' <<< "$inbounds_json")" \
-    '__OUTBOUNDS_JSON__' "$(jq '.' <<< "$outbounds_json")" \
+    '__OUTBOUNDS_JSON__' "$(build_outbounds_json | jq '.')" \
     '__ROUTE_RULES_JSON__' "$(jq '.' <<< "$route_rules_json")"
 
   jq . "${GENERATED_DIR}/config.json" >/dev/null
@@ -541,31 +625,32 @@ render_sing_box_config() {
 }
 
 render_mihomo_config() {
-  local nginx_public_listen public_port
-  nginx_public_listen="$(get_ingress_public_listen)"
-  public_port="$(parse_public_port "$nginx_public_listen")"
-
   local proxies_json='[]'
 
   local reality_count trojan_count socks5_count i
-  reality_count="$(yq e '(.reality_backends // []) | length' "$CONFIG_FILE")"
-  trojan_count="$(yq e '(.trojan_backends // []) | length' "$CONFIG_FILE")"
-  socks5_count="$(yq e '(.socks5_backends // []) | length' "$CONFIG_FILE")"
+  reality_count="$(count_ingress_reality_backends)"
+  trojan_count="$(count_ingress_trojan_backends)"
+  socks5_count="$(count_sing_box_socks5_backends)"
+
+  local public_port=""
+  if (( reality_count + trojan_count > 0 )); then
+    public_port="$(parse_public_port "$(get_ingress_public_listen)")"
+  fi
 
   for (( i = 0; i < reality_count; i++ )); do
     local name server uuid servername public_key short_id_raw short_id_first
 
-    name="$(read_yaml_required ".reality_backends[$i].name" "reality_backends[$i].name")"
-    server="$(read_yaml_optional ".reality_backends[$i].server" "")"
-    servername="$(read_yaml_required ".reality_backends[$i].servername" "reality_backends[$i].servername")"
-    uuid="$(read_yaml_required ".reality_backends[$i].user_uuid" "reality_backends[$i].user_uuid")"
-    public_key="$(read_yaml_required ".reality_backends[$i].public_key" "reality_backends[$i].public_key")"
+    name="$(read_yaml_required ".ingress.reality_backends[$i].name" "ingress.reality_backends[$i].name")"
+    server="$(read_yaml_optional ".ingress.reality_backends[$i].server" "")"
+    servername="$(read_yaml_required ".ingress.reality_backends[$i].servername" "ingress.reality_backends[$i].servername")"
+    uuid="$(read_yaml_required ".ingress.reality_backends[$i].user_uuid" "ingress.reality_backends[$i].user_uuid")"
+    public_key="$(read_yaml_required ".ingress.reality_backends[$i].public_key" "ingress.reality_backends[$i].public_key")"
 
     if [[ -z "$server" || "$server" == "null" ]]; then
       server="$servername"
     fi
 
-    short_id_raw="$(yq e -o=json ".reality_backends[$i].short_id" "$CONFIG_FILE")"
+    short_id_raw="$(yq e -o=json ".ingress.reality_backends[$i].short_id" "$CONFIG_FILE")"
     short_id_first="$(jq -r '
       if type == "array" then
         (map(tostring | select(length > 0)) | .[0] // "")
@@ -575,7 +660,7 @@ render_mihomo_config() {
         tostring
       end
     ' <<< "$short_id_raw")"
-    [[ -n "$short_id_first" ]] || die "reality_backends[$i].short_id 不能为空"
+    [[ -n "$short_id_first" ]] || die "ingress.reality_backends[$i].short_id 不能为空"
 
     local proxy_obj
     proxy_obj="$(jq -n \
@@ -611,11 +696,11 @@ render_mihomo_config() {
   for (( i = 0; i < trojan_count; i++ )); do
     local name server password servername skip_cert_verify
 
-    name="$(read_yaml_required ".trojan_backends[$i].name" "trojan_backends[$i].name")"
-    server="$(read_yaml_optional ".trojan_backends[$i].server" "")"
-    servername="$(read_yaml_required ".trojan_backends[$i].servername" "trojan_backends[$i].servername")"
-    password="$(read_yaml_required ".trojan_backends[$i].password" "trojan_backends[$i].password")"
-    skip_cert_verify="$(normalize_bool "$(read_yaml_optional ".trojan_backends[$i].skip_cert_verify" 'false')" "trojan_backends[$i].skip_cert_verify")"
+    name="$(read_yaml_required ".ingress.trojan_backends[$i].name" "ingress.trojan_backends[$i].name")"
+    server="$(read_yaml_optional ".ingress.trojan_backends[$i].server" "")"
+    servername="$(read_yaml_required ".ingress.trojan_backends[$i].servername" "ingress.trojan_backends[$i].servername")"
+    password="$(read_yaml_required ".ingress.trojan_backends[$i].password" "ingress.trojan_backends[$i].password")"
+    skip_cert_verify="$(normalize_bool "$(read_yaml_optional ".ingress.trojan_backends[$i].skip_cert_verify" 'false')" "ingress.trojan_backends[$i].skip_cert_verify")"
 
     if [[ -z "$server" || "$server" == "null" ]]; then
       server="$servername"
@@ -646,12 +731,12 @@ render_mihomo_config() {
   for (( i = 0; i < socks5_count; i++ )); do
     local name server username password listen_port
 
-    name="$(read_yaml_required ".socks5_backends[$i].name" "socks5_backends[$i].name")"
-    server="$(read_yaml_required ".socks5_backends[$i].server" "socks5_backends[$i].server")"
-    username="$(read_yaml_required ".socks5_backends[$i].username" "socks5_backends[$i].username")"
-    password="$(read_yaml_required ".socks5_backends[$i].password" "socks5_backends[$i].password")"
-    listen_port="$(read_yaml_required ".socks5_backends[$i].listen_port" "socks5_backends[$i].listen_port")"
-    assert_port "$listen_port" "socks5_backends[$i].listen_port"
+    name="$(read_yaml_required ".sing_box.socks5_backends[$i].name" "sing_box.socks5_backends[$i].name")"
+    server="$(read_yaml_required ".sing_box.socks5_backends[$i].server" "sing_box.socks5_backends[$i].server")"
+    username="$(read_yaml_required ".sing_box.socks5_backends[$i].username" "sing_box.socks5_backends[$i].username")"
+    password="$(read_yaml_required ".sing_box.socks5_backends[$i].password" "sing_box.socks5_backends[$i].password")"
+    listen_port="$(read_yaml_required ".sing_box.socks5_backends[$i].listen_port" "sing_box.socks5_backends[$i].listen_port")"
+    assert_port "$listen_port" "sing_box.socks5_backends[$i].listen_port"
 
     local proxy_obj
     proxy_obj="$(jq -n \
@@ -688,8 +773,8 @@ render_mihomo_config() {
 
 render_socks_installer() {
   local socks_proxy_port
-  socks_proxy_port="$(get_socks_proxy_port)"
-  assert_port "$socks_proxy_port" 'egress.socks_proxy.port'
+  socks_proxy_port="$(get_warp_egress_port)"
+  assert_port "$socks_proxy_port" 'egress.warp.port'
 
   render_template_file \
     "${TEMPLATE_DIR}/install-socks-proxy.sh.tpl" \
@@ -707,10 +792,20 @@ render_all() {
   mkdir -p "$GENERATED_DIR"
 
   validate_unique_bindings
-  render_nginx_config
-  render_sing_box_config
+
+  if has_ingress; then
+    render_nginx_config
+  fi
+
+  if has_sing_box_workload; then
+    render_sing_box_config
+  fi
+
   render_mihomo_config
-  render_socks_installer
+
+  if has_local_warp_egress; then
+    render_socks_installer
+  fi
 
   log_info "渲染阶段完成"
 }

@@ -6,14 +6,14 @@ if [[ -z "${HYPERTUNNEL_ROOT:-}" ]]; then
   HYPERTUNNEL_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 fi
 
-CONFIG_FILE="${HYPERTUNNEL_ROOT}/config/sni-routing.yaml"
-ENV_FILE="${HYPERTUNNEL_ROOT}/.env"
-GENERATED_DIR="${HYPERTUNNEL_ROOT}/generated"
-TEMPLATE_DIR="${HYPERTUNNEL_ROOT}/templates"
-ASSET_NGINX_DIR="${HYPERTUNNEL_ROOT}/assets/nginx"
-ASSET_SYSTEMD_DIR="${HYPERTUNNEL_ROOT}/assets/systemd"
-STATE_DIR="${HYPERTUNNEL_ROOT}/state"
-BACKUP_ROOT="${STATE_DIR}/backups"
+CONFIG_FILE="${CONFIG_FILE:-${HYPERTUNNEL_ROOT}/config/sni-routing.yaml}"
+ENV_FILE="${ENV_FILE:-${HYPERTUNNEL_ROOT}/.env}"
+GENERATED_DIR="${GENERATED_DIR:-${HYPERTUNNEL_ROOT}/generated}"
+TEMPLATE_DIR="${TEMPLATE_DIR:-${HYPERTUNNEL_ROOT}/templates}"
+ASSET_NGINX_DIR="${ASSET_NGINX_DIR:-${HYPERTUNNEL_ROOT}/assets/nginx}"
+ASSET_SYSTEMD_DIR="${ASSET_SYSTEMD_DIR:-${HYPERTUNNEL_ROOT}/assets/systemd}"
+STATE_DIR="${STATE_DIR:-${HYPERTUNNEL_ROOT}/state}"
+BACKUP_ROOT="${BACKUP_ROOT:-${STATE_DIR}/backups}"
 
 now_ts() {
   date '+%Y-%m-%d %H:%M:%S'
@@ -143,9 +143,67 @@ get_unknown_sni_action() {
   read_yaml_optional '.ingress.unknown_sni_action' 'reject'
 }
 
-has_explicit_static_site() {
+has_ingress() {
   local exists
-  exists="$(yq e -r '.static_site != null' "$CONFIG_FILE")"
+  exists="$(yq e -r '.ingress != null' "$CONFIG_FILE")"
+  [[ "$exists" == "true" ]]
+}
+
+has_sing_box() {
+  local exists
+  exists="$(yq e -r '.sing_box != null' "$CONFIG_FILE")"
+  [[ "$exists" == "true" ]]
+}
+
+count_ingress_reality_backends() {
+  if ! has_ingress; then
+    printf '0'
+    return 0
+  fi
+
+  yq e '(.ingress.reality_backends // []) | length' "$CONFIG_FILE"
+}
+
+count_ingress_trojan_backends() {
+  if ! has_ingress; then
+    printf '0'
+    return 0
+  fi
+
+  yq e '(.ingress.trojan_backends // []) | length' "$CONFIG_FILE"
+}
+
+count_sing_box_socks5_backends() {
+  if ! has_sing_box; then
+    printf '0'
+    return 0
+  fi
+
+  yq e '(.sing_box.socks5_backends // []) | length' "$CONFIG_FILE"
+}
+
+has_sing_box_workload() {
+  local reality_count trojan_count socks5_count
+  reality_count="$(count_ingress_reality_backends)"
+  trojan_count="$(count_ingress_trojan_backends)"
+  socks5_count="$(count_sing_box_socks5_backends)"
+
+  (( reality_count + trojan_count + socks5_count > 0 ))
+}
+
+has_egress() {
+  local exists
+  exists="$(yq e -r '.egress != null' "$CONFIG_FILE")"
+  [[ "$exists" == "true" ]]
+}
+
+has_explicit_static_site() {
+  if ! has_ingress; then
+    return 1
+  fi
+
+  local exists
+  exists="$(yq e -r '.ingress.static_site != null' "$CONFIG_FILE")"
   [[ "$exists" == "true" ]]
 }
 
@@ -159,10 +217,10 @@ has_effective_static_site() {
 
 find_first_enabled_fallback_trojan_index() {
   local trojan_count i enabled
-  trojan_count="$(yq e '(.trojan_backends // []) | length' "$CONFIG_FILE")"
+  trojan_count="$(count_ingress_trojan_backends)"
 
   for (( i = 0; i < trojan_count; i++ )); do
-    enabled="$(read_yaml_optional ".trojan_backends[$i].fallback_site.enabled" 'false')"
+    enabled="$(read_yaml_optional ".ingress.trojan_backends[$i].fallback_site.enabled" 'false')"
     if is_true "$enabled"; then
       printf '%s' "$i"
       return 0
@@ -185,13 +243,13 @@ get_primary_fallback_trojan_index() {
 get_primary_fallback_trojan_listen_port() {
   local fallback_index
   fallback_index="$(get_primary_fallback_trojan_index)"
-  read_yaml_required ".trojan_backends[$fallback_index].listen_port" "trojan_backends[$fallback_index].listen_port"
+  read_yaml_required ".ingress.trojan_backends[$fallback_index].listen_port" "ingress.trojan_backends[$fallback_index].listen_port"
 }
 
 resolve_fallback_site_web_root() {
   local fallback_index="$1"
   local value=""
-  value="$(read_yaml_optional ".trojan_backends[$fallback_index].fallback_site.web_root" '')"
+  value="$(read_yaml_optional ".ingress.trojan_backends[$fallback_index].fallback_site.web_root" '')"
 
   if [[ -n "$value" && "$value" != "null" ]]; then
     printf '%s' "$value"
@@ -199,49 +257,49 @@ resolve_fallback_site_web_root() {
   fi
 
   if has_explicit_static_site; then
-    read_yaml_required '.static_site.web_root' 'static_site.web_root'
+    read_yaml_required '.ingress.static_site.web_root' 'ingress.static_site.web_root'
     return 0
   fi
 
-  die "缺少必填字段: trojan_backends[$fallback_index].fallback_site.web_root"
+  die "缺少必填字段: ingress.trojan_backends[$fallback_index].fallback_site.web_root"
 }
 
 get_effective_static_site_domain() {
   if has_explicit_static_site; then
-    read_yaml_required '.static_site.domain' 'static_site.domain'
+    read_yaml_required '.ingress.static_site.domain' 'ingress.static_site.domain'
     return 0
   fi
 
   local fallback_index
   fallback_index="$(get_primary_fallback_trojan_index)"
-  read_yaml_required ".trojan_backends[$fallback_index].servername" "trojan_backends[$fallback_index].servername"
+  read_yaml_required ".ingress.trojan_backends[$fallback_index].servername" "ingress.trojan_backends[$fallback_index].servername"
 }
 
 get_effective_static_site_cert_file() {
   if has_explicit_static_site; then
-    read_yaml_required '.static_site.cert_file' 'static_site.cert_file'
+    read_yaml_required '.ingress.static_site.cert_file' 'ingress.static_site.cert_file'
     return 0
   fi
 
   local fallback_index
   fallback_index="$(get_primary_fallback_trojan_index)"
-  read_yaml_required ".trojan_backends[$fallback_index].tls_cert_file" "trojan_backends[$fallback_index].tls_cert_file"
+  read_yaml_required ".ingress.trojan_backends[$fallback_index].tls_cert_file" "ingress.trojan_backends[$fallback_index].tls_cert_file"
 }
 
 get_effective_static_site_key_file() {
   if has_explicit_static_site; then
-    read_yaml_required '.static_site.key_file' 'static_site.key_file'
+    read_yaml_required '.ingress.static_site.key_file' 'ingress.static_site.key_file'
     return 0
   fi
 
   local fallback_index
   fallback_index="$(get_primary_fallback_trojan_index)"
-  read_yaml_required ".trojan_backends[$fallback_index].tls_key_file" "trojan_backends[$fallback_index].tls_key_file"
+  read_yaml_required ".ingress.trojan_backends[$fallback_index].tls_key_file" "ingress.trojan_backends[$fallback_index].tls_key_file"
 }
 
 get_effective_static_site_web_root() {
   if has_explicit_static_site; then
-    read_yaml_required '.static_site.web_root' 'static_site.web_root'
+    read_yaml_required '.ingress.static_site.web_root' 'ingress.static_site.web_root'
     return 0
   fi
 
@@ -254,8 +312,162 @@ get_static_site_domain() {
   get_effective_static_site_domain
 }
 
-get_socks_proxy_port() {
-  read_yaml_optional '.egress.socks_proxy.port' '39996'
+list_egress_names() {
+  if ! has_egress; then
+    return 0
+  fi
+
+  yq e -r '.egress | keys | .[]' "$CONFIG_FILE"
+}
+
+read_named_egress_optional() {
+  local egress_name="$1"
+  local field="$2"
+  local default_value="$3"
+  local value
+
+  value="$(EGRESS_NAME="$egress_name" yq e -r ".egress[strenv(EGRESS_NAME)].${field}" "$CONFIG_FILE")"
+  if [[ -z "$value" || "$value" == "null" ]]; then
+    printf '%s' "$default_value"
+  else
+    printf '%s' "$value"
+  fi
+}
+
+read_named_egress_required() {
+  local egress_name="$1"
+  local field="$2"
+  local where="$3"
+  local value
+
+  value="$(EGRESS_NAME="$egress_name" yq e -r ".egress[strenv(EGRESS_NAME)].${field}" "$CONFIG_FILE")"
+  if [[ -z "$value" || "$value" == "null" ]]; then
+    die "缺少必填字段: ${where}"
+  fi
+
+  printf '%s' "$value"
+}
+
+get_egress_type() {
+  local egress_name="$1"
+
+  if [[ "$egress_name" == "direct" ]]; then
+    printf 'direct'
+    return 0
+  fi
+
+  read_named_egress_required "$egress_name" 'type' "egress.${egress_name}.type"
+}
+
+resolve_backend_egress_name() {
+  local expr="$1"
+  local where="$2"
+  local egress_name
+
+  egress_name="$(read_yaml_optional "$expr" 'direct')"
+  if [[ -z "$egress_name" || "$egress_name" == "null" ]]; then
+    egress_name='direct'
+  fi
+
+  if [[ "$egress_name" == "direct" ]]; then
+    printf 'direct'
+    return 0
+  fi
+
+  get_egress_type "$egress_name" >/dev/null
+  printf '%s' "$egress_name"
+}
+
+egress_outbound_tag() {
+  local egress_name="$1"
+
+  if [[ "$egress_name" == "direct" ]]; then
+    printf 'direct-out'
+    return 0
+  fi
+
+  local safe_name
+  safe_name="$(sanitize_name "$egress_name")"
+  [[ -n "$safe_name" ]] || die "egress 名称不可用: ${egress_name}"
+  printf 'egress-%s-out' "$safe_name"
+}
+
+is_local_address() {
+  case "${1:-}" in
+    127.0.0.1|localhost|::1|[::1])
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+is_local_socks_egress() {
+  local egress_name="$1"
+  local egress_type egress_server
+
+  egress_type="$(get_egress_type "$egress_name")"
+  if [[ "$egress_type" != "socks" ]]; then
+    return 1
+  fi
+
+  egress_server="$(read_named_egress_required "$egress_name" 'server' "egress.${egress_name}.server")"
+  is_local_address "$egress_server"
+}
+
+has_warp_egress() {
+  if ! has_egress; then
+    return 1
+  fi
+
+  local warp_type
+  warp_type="$(read_named_egress_optional 'warp' 'type' '')"
+  [[ -n "$warp_type" && "$warp_type" != "null" ]]
+}
+
+has_local_warp_egress() {
+  if ! has_warp_egress; then
+    return 1
+  fi
+
+  is_local_socks_egress 'warp'
+}
+
+get_warp_egress_port() {
+  read_named_egress_required 'warp' 'port' 'egress.warp.port'
+}
+
+backend_uses_named_egress() {
+  local target="$1"
+  local reality_count trojan_count socks5_count i egress_name
+
+  reality_count="$(count_ingress_reality_backends)"
+  trojan_count="$(count_ingress_trojan_backends)"
+  socks5_count="$(count_sing_box_socks5_backends)"
+
+  for (( i = 0; i < reality_count; i++ )); do
+    egress_name="$(resolve_backend_egress_name ".ingress.reality_backends[$i].egress" "ingress.reality_backends[$i].egress")"
+    if [[ "$egress_name" == "$target" ]]; then
+      return 0
+    fi
+  done
+
+  for (( i = 0; i < trojan_count; i++ )); do
+    egress_name="$(resolve_backend_egress_name ".ingress.trojan_backends[$i].egress" "ingress.trojan_backends[$i].egress")"
+    if [[ "$egress_name" == "$target" ]]; then
+      return 0
+    fi
+  done
+
+  for (( i = 0; i < socks5_count; i++ )); do
+    egress_name="$(resolve_backend_egress_name ".sing_box.socks5_backends[$i].egress" "sing_box.socks5_backends[$i].egress")"
+    if [[ "$egress_name" == "$target" ]]; then
+      return 0
+    fi
+  done
+
+  return 1
 }
 
 render_template_file() {

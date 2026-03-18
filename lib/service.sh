@@ -12,11 +12,15 @@ resolve_sing_box_bin() {
 }
 
 service_check_configs() {
-  local sing_box_bin
-  sing_box_bin="$(resolve_sing_box_bin)"
+  if has_sing_box_workload; then
+    local sing_box_bin
+    sing_box_bin="$(resolve_sing_box_bin)"
+    "$sing_box_bin" check -c /etc/sing-box/config.json
+  fi
 
-  "$sing_box_bin" check -c /etc/sing-box/config.json
-  nginx -t
+  if has_ingress; then
+    nginx -t
+  fi
 
   log_info '配置校验通过'
 }
@@ -27,16 +31,26 @@ service_restart() {
     return 0
   fi
 
-  systemctl daemon-reload
-  systemctl enable --now sing-box
-  systemctl restart nginx
+  if has_sing_box_workload; then
+    systemctl daemon-reload
+    systemctl enable --now sing-box
+  fi
+
+  if has_ingress; then
+    systemctl restart nginx
+  fi
 
   log_info '服务重启完成'
 }
 
 service_status() {
-  systemctl --no-pager --full status sing-box | sed -n '1,8p' || true
-  systemctl --no-pager --full status nginx | sed -n '1,8p' || true
+  if has_sing_box_workload; then
+    systemctl --no-pager --full status sing-box | sed -n '1,8p' || true
+  fi
+
+  if has_ingress; then
+    systemctl --no-pager --full status nginx | sed -n '1,8p' || true
+  fi
 }
 
 run_service_stage() {

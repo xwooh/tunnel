@@ -18,13 +18,13 @@ run_check() {
 
 resolve_probe_ip() {
   local candidate
-  candidate="$(read_yaml_optional '.reality_backends[0].server' '')"
+  candidate="$(read_yaml_optional '.ingress.reality_backends[0].server' '')"
   if [[ -n "$candidate" && "$candidate" != "null" ]]; then
     printf '%s' "$candidate"
     return 0
   fi
 
-  candidate="$(read_yaml_optional '.trojan_backends[0].server' '')"
+  candidate="$(read_yaml_optional '.ingress.trojan_backends[0].server' '')"
   if [[ -n "$candidate" && "$candidate" != "null" ]]; then
     printf '%s' "$candidate"
     return 0
@@ -59,35 +59,17 @@ check_listener_port() {
   ss -ltn | grep -qE "[:.]${port}[[:space:]]"
 }
 
-check_socks_listener_if_needed() {
-  local socks_needed="false"
-  local reality_count trojan_count i
-  reality_count="$(yq e '(.reality_backends // []) | length' "$CONFIG_FILE")"
-  trojan_count="$(yq e '(.trojan_backends // []) | length' "$CONFIG_FILE")"
-
-  for (( i = 0; i < reality_count; i++ )); do
-    if is_true "$(read_yaml_optional ".reality_backends[$i].use_socks" 'false')"; then
-      socks_needed="true"
-      break
-    fi
-  done
-
-  if is_false "$socks_needed"; then
-    for (( i = 0; i < trojan_count; i++ )); do
-      if is_true "$(read_yaml_optional ".trojan_backends[$i].use_socks" 'false')"; then
-        socks_needed="true"
-        break
-      fi
-    done
+check_local_warp_listener_if_needed() {
+  if ! backend_uses_named_egress 'warp'; then
+    return 0
   fi
 
-  if is_false "$socks_needed"; then
+  if ! has_local_warp_egress; then
     return 0
   fi
 
   local socks_port
-  socks_port="$(get_socks_proxy_port)"
-
+  socks_port="$(get_warp_egress_port)"
   check_listener_port "$socks_port"
 }
 
@@ -98,39 +80,42 @@ check_socks5_backend_listener() {
 
 run_verify_stage() {
   require_cmd yq
-  require_cmd openssl
-  require_cmd curl
   require_cmd ss
 
+  if has_ingress; then
+    require_cmd openssl
+  fi
+
   if has_effective_static_site; then
+    require_cmd curl
     run_check '静态域名 HTTPS 响应' check_static_site_http
-  else
+  elif has_ingress; then
     log_info '跳过静态域名 HTTPS 响应检查：当前未配置静态站'
   fi
 
   local reality_count trojan_count socks5_count i servername
-  reality_count="$(yq e '(.reality_backends // []) | length' "$CONFIG_FILE")"
-  trojan_count="$(yq e '(.trojan_backends // []) | length' "$CONFIG_FILE")"
-  socks5_count="$(yq e '(.socks5_backends // []) | length' "$CONFIG_FILE")"
+  reality_count="$(count_ingress_reality_backends)"
+  trojan_count="$(count_ingress_trojan_backends)"
+  socks5_count="$(count_sing_box_socks5_backends)"
 
   for (( i = 0; i < reality_count; i++ )); do
-    servername="$(read_yaml_required ".reality_backends[$i].servername" "reality_backends[$i].servername")"
+    servername="$(read_yaml_required ".ingress.reality_backends[$i].servername" "ingress.reality_backends[$i].servername")"
     run_check "Reality SNI 握手 ${servername}" check_sni_handshake "$servername"
   done
 
   for (( i = 0; i < trojan_count; i++ )); do
-    servername="$(read_yaml_required ".trojan_backends[$i].servername" "trojan_backends[$i].servername")"
+    servername="$(read_yaml_required ".ingress.trojan_backends[$i].servername" "ingress.trojan_backends[$i].servername")"
     run_check "Trojan SNI 握手 ${servername}" check_sni_handshake "$servername"
   done
 
   for (( i = 0; i < socks5_count; i++ )); do
     local name listen_port
-    name="$(read_yaml_required ".socks5_backends[$i].name" "socks5_backends[$i].name")"
-    listen_port="$(read_yaml_required ".socks5_backends[$i].listen_port" "socks5_backends[$i].listen_port")"
+    name="$(read_yaml_required ".sing_box.socks5_backends[$i].name" "sing_box.socks5_backends[$i].name")"
+    listen_port="$(read_yaml_required ".sing_box.socks5_backends[$i].listen_port" "sing_box.socks5_backends[$i].listen_port")"
     run_check "SOCKS5 监听 ${name}" check_socks5_backend_listener "$listen_port"
   done
 
-  run_check 'SOCKS 监听检查（启用 use_socks 时）' check_socks_listener_if_needed
+  run_check 'WARP 本地监听检查（使用 egress.warp 时）' check_local_warp_listener_if_needed
 
   if (( VERIFY_FAILURES > 0 )); then
     die "验证失败: ${VERIFY_FAILURES} 项检查未通过"

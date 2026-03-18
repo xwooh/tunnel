@@ -45,20 +45,24 @@ cp .env.example .env
 
 ## 配置说明
 
-- `static_site` 现在可以省略；省略后会自动选择第一个 `fallback_site.enabled=true` 的 Trojan 后端作为静态站来源。
-- 在省略 `static_site` 的模式下，静态站域名与证书会复用该 Trojan 的 `servername`、`tls_cert_file`、`tls_key_file`。
-- 启用 `fallback_site` 的 Trojan 后端建议显式设置 `fallback_site.web_root`；如果没有 `static_site`，则这是必填项。
-- `socks5_backends` 会直接生成 sing-box 的独立 SOCKS5 监听端口，不复用 `443 + SNI` 分流。
-- `socks5_backends[*].server` 是导出客户端配置时使用的连接地址，可以填写域名或 IP。
+- 顶层块分为 `egress`、`ingress`、`sing_box`。哪个块存在，就执行哪个块对应的逻辑；缺失的块会整体跳过，不再要求相关字段。
+- `ingress` 负责 `443 + SNI` 这一套能力，包括 `public_listen`、`unknown_sni_action`、`static_site`、`reality_backends`、`trojan_backends`。
+- `ingress.static_site` 可以省略；省略后会自动选择第一个 `fallback_site.enabled=true` 的 Trojan 后端作为静态站来源，并复用它的 `servername`、`tls_cert_file`、`tls_key_file`。
+- 启用 `fallback_site` 的 Trojan 后端建议显式设置 `fallback_site.web_root`；如果没有 `ingress.static_site`，则这是必填项。
+- `sing_box.socks5_backends` 会直接生成 sing-box 的独立 SOCKS5 监听端口，不复用 `443 + SNI` 分流。
+- `sing_box.socks5_backends[*].server` 是导出客户端配置时使用的连接地址，可以填写域名或 IP。
+- `sing_box.socks5_backends[*].listen_host` 是可选的，默认 `0.0.0.0`；如果只想本机可访问，可以改成 `127.0.0.1`。
+- backend 的 `egress` 字段是可选的；不填写时默认走内置 `direct`，填写时必须引用顶层 `egress` 中已定义的名字。
+- 顶层 `egress` 现在是命名集合，例如 `egress.warp`。当前支持 `type: socks`，可被 `ingress` 和 `sing_box` 下的 backend 共用。
 
 ## 渲染产物
 
 执行 `render` 后会在 `generated/` 下生成：
 
-- `nginx.conf`
-- `config.json`（sing-box）
+- `nginx.conf`（仅在存在 `ingress` 时生成）
+- `config.json`（仅在存在 reality/trojan/socks5 backend 时生成）
 - `mihomo-client.yaml`
-- `install-socks-proxy.sh`
+- `install-socks-proxy.sh`（仅在存在本地 `egress.warp` 时生成）
 
 ## 备份与回滚
 
@@ -75,7 +79,7 @@ cp .env.example .env
 
 ## 说明
 
-- `ENABLE_WARP_INSTALL=auto` 时，仅在存在 `use_socks: true` 后端时自动安装 WARP socks。
+- `ENABLE_WARP_INSTALL=auto` 时，仅在有 backend 引用本地 `egress.warp` 时自动安装 WARP socks。
 - `nearby` 会根据 `RIFT_VERSION` 生成 `rift-v<RIFT_VERSION>-linux-x86_64-musl` 下载包名，需要在 Linux x86_64 主机上运行。
-- 当 `ingress.unknown_sni_action=fallback_static` 且未配置 `static_site` 时，未知 SNI 会先转发到第一个启用 `fallback_site` 的 Trojan，再由它回落到对应站点。
-- `socks5_backends` 固定使用用户名密码认证，监听独立公网端口，不参与 `use_socks` 出站路由。
+- 当 `ingress.unknown_sni_action=fallback_static` 且未配置 `ingress.static_site` 时，未知 SNI 会先转发到第一个启用 `fallback_site` 的 Trojan，再由它回落到对应站点。
+- `sing_box.socks5_backends` 固定使用用户名密码认证，监听独立公网端口。

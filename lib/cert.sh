@@ -19,14 +19,14 @@ collect_cert_triplets() {
   fi
 
   local trojan_count
-  trojan_count="$(yq e '(.trojan_backends // []) | length' "$CONFIG_FILE")"
+  trojan_count="$(count_ingress_trojan_backends)"
 
   local i
   for (( i = 0; i < trojan_count; i++ )); do
     local domain cert_file key_file
-    domain="$(read_yaml_required ".trojan_backends[$i].servername" "trojan_backends[$i].servername")"
-    cert_file="$(read_yaml_required ".trojan_backends[$i].tls_cert_file" "trojan_backends[$i].tls_cert_file")"
-    key_file="$(read_yaml_required ".trojan_backends[$i].tls_key_file" "trojan_backends[$i].tls_key_file")"
+    domain="$(read_yaml_required ".ingress.trojan_backends[$i].servername" "ingress.trojan_backends[$i].servername")"
+    cert_file="$(read_yaml_required ".ingress.trojan_backends[$i].tls_cert_file" "ingress.trojan_backends[$i].tls_cert_file")"
+    key_file="$(read_yaml_required ".ingress.trojan_backends[$i].tls_key_file" "ingress.trojan_backends[$i].tls_key_file")"
     printf '%s|%s|%s\n' "$domain" "$cert_file" "$key_file"
   done
 }

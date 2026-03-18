@@ -3,48 +3,46 @@
 source "${HYPERTUNNEL_ROOT}/lib/common.sh"
 
 ensure_generated_files() {
-  [[ -f "${GENERATED_DIR}/nginx.conf" ]] || die "缺少生成文件: nginx.conf"
-  [[ -f "${GENERATED_DIR}/config.json" ]] || die "缺少生成文件: config.json"
+  if has_ingress; then
+    [[ -f "${GENERATED_DIR}/nginx.conf" ]] || die "缺少生成文件: nginx.conf"
+  fi
+
+  if has_sing_box_workload; then
+    [[ -f "${GENERATED_DIR}/config.json" ]] || die "缺少生成文件: config.json"
+  fi
+
   [[ -f "${GENERATED_DIR}/mihomo-client.yaml" ]] || die "缺少生成文件: mihomo-client.yaml"
-  [[ -f "${GENERATED_DIR}/install-socks-proxy.sh" ]] || die "缺少生成文件: install-socks-proxy.sh"
+
+  if has_local_warp_egress; then
+    [[ -f "${GENERATED_DIR}/install-socks-proxy.sh" ]] || die "缺少生成文件: install-socks-proxy.sh"
+  fi
 }
 
-has_socks_backends() {
-  local reality_count trojan_count i
-  reality_count="$(yq e '(.reality_backends // []) | length' "$CONFIG_FILE")"
-  trojan_count="$(yq e '(.trojan_backends // []) | length' "$CONFIG_FILE")"
-
-  for (( i = 0; i < reality_count; i++ )); do
-    if is_true "$(read_yaml_optional ".reality_backends[$i].use_socks" 'false')"; then
-      printf 'true'
-      return 0
-    fi
-  done
-
-  for (( i = 0; i < trojan_count; i++ )); do
-    if is_true "$(read_yaml_optional ".trojan_backends[$i].use_socks" 'false')"; then
-      printf 'true'
-      return 0
-    fi
-  done
-
-  printf 'false'
+has_backends_using_warp_egress() {
+  if backend_uses_named_egress 'warp'; then
+    printf 'true'
+  else
+    printf 'false'
+  fi
 }
 
 should_install_warp() {
-  local mode needs_socks
+  local mode uses_warp
   mode="$(lower "${ENABLE_WARP_INSTALL:-auto}")"
-  needs_socks="$(has_socks_backends)"
+  uses_warp="$(has_backends_using_warp_egress)"
 
   case "$mode" in
     true|1|yes|on)
+      if ! has_local_warp_egress; then
+        die 'ENABLE_WARP_INSTALL=true 时，必须配置本地 egress.warp'
+      fi
       printf 'true'
       ;;
     false|0|no|off)
       printf 'false'
       ;;
     auto)
-      if is_true "$needs_socks"; then
+      if is_true "$uses_warp" && has_local_warp_egress; then
         printf 'true'
       else
         printf 'false'
@@ -93,10 +91,10 @@ collect_static_web_roots() {
   fi
 
   local trojan_count i enabled web_root
-  trojan_count="$(yq e '(.trojan_backends // []) | length' "$CONFIG_FILE")"
+  trojan_count="$(count_ingress_trojan_backends)"
 
   for (( i = 0; i < trojan_count; i++ )); do
-    enabled="$(read_yaml_optional ".trojan_backends[$i].fallback_site.enabled" 'false')"
+    enabled="$(read_yaml_optional ".ingress.trojan_backends[$i].fallback_site.enabled" 'false')"
     if ! is_true "$enabled"; then
       continue
     fi
@@ -112,17 +110,31 @@ deploy_generated_files() {
   local web_roots web_root
   web_roots="$(collect_static_web_roots)"
 
-  mkdir -p /etc/nginx /etc/sing-box /etc/systemd/system /root
+  if has_ingress; then
+    mkdir -p /etc/nginx
+  fi
+  if has_sing_box_workload; then
+    mkdir -p /etc/sing-box /etc/systemd/system
+  fi
+  if has_local_warp_egress; then
+    mkdir -p /root
+  fi
 
   while IFS= read -r web_root; do
     [[ -n "$web_root" ]] || continue
     mkdir -p "$web_root"
   done <<< "$web_roots"
 
-  install -m 644 "${GENERATED_DIR}/nginx.conf" /etc/nginx/nginx.conf
-  install -m 644 "${GENERATED_DIR}/config.json" /etc/sing-box/config.json
-  install -m 644 "${ASSET_SYSTEMD_DIR}/sing-box.service" /etc/systemd/system/sing-box.service
-  install -m 755 "${GENERATED_DIR}/install-socks-proxy.sh" /root/install-socks-proxy.sh
+  if has_ingress; then
+    install -m 644 "${GENERATED_DIR}/nginx.conf" /etc/nginx/nginx.conf
+  fi
+  if has_sing_box_workload; then
+    install -m 644 "${GENERATED_DIR}/config.json" /etc/sing-box/config.json
+    install -m 644 "${ASSET_SYSTEMD_DIR}/sing-box.service" /etc/systemd/system/sing-box.service
+  fi
+  if has_local_warp_egress; then
+    install -m 755 "${GENERATED_DIR}/install-socks-proxy.sh" /root/install-socks-proxy.sh
+  fi
 
   while IFS= read -r web_root; do
     [[ -n "$web_root" ]] || continue
@@ -149,10 +161,16 @@ create_backup_snapshot() {
   mkdir -p "$backup_dir"
   : > "$manifest_file"
 
-  backup_target_file "/etc/nginx/nginx.conf" "$backup_dir" "$manifest_file"
-  backup_target_file "/etc/sing-box/config.json" "$backup_dir" "$manifest_file"
-  backup_target_file "/etc/systemd/system/sing-box.service" "$backup_dir" "$manifest_file"
-  backup_target_file "/root/install-socks-proxy.sh" "$backup_dir" "$manifest_file"
+  if has_ingress; then
+    backup_target_file "/etc/nginx/nginx.conf" "$backup_dir" "$manifest_file"
+  fi
+  if has_sing_box_workload; then
+    backup_target_file "/etc/sing-box/config.json" "$backup_dir" "$manifest_file"
+    backup_target_file "/etc/systemd/system/sing-box.service" "$backup_dir" "$manifest_file"
+  fi
+  if has_local_warp_egress; then
+    backup_target_file "/root/install-socks-proxy.sh" "$backup_dir" "$manifest_file"
+  fi
 
   while IFS= read -r web_root; do
     [[ -n "$web_root" ]] || continue
