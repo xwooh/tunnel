@@ -308,6 +308,49 @@ get_effective_static_site_web_root() {
   resolve_fallback_site_web_root "$fallback_index"
 }
 
+collect_cert_triplets() {
+  if has_effective_static_site; then
+    local static_domain static_cert static_key
+    static_domain="$(get_effective_static_site_domain)"
+    static_cert="$(get_effective_static_site_cert_file)"
+    static_key="$(get_effective_static_site_key_file)"
+
+    printf '%s|%s|%s\n' "$static_domain" "$static_cert" "$static_key"
+  fi
+
+  local trojan_count
+  trojan_count="$(count_ingress_trojan_backends)"
+
+  local i
+  for (( i = 0; i < trojan_count; i++ )); do
+    local domain cert_file key_file
+    domain="$(read_yaml_required ".ingress.trojan_backends[$i].servername" "ingress.trojan_backends[$i].servername")"
+    cert_file="$(read_yaml_required ".ingress.trojan_backends[$i].tls_cert_file" "ingress.trojan_backends[$i].tls_cert_file")"
+    key_file="$(read_yaml_required ".ingress.trojan_backends[$i].tls_key_file" "ingress.trojan_backends[$i].tls_key_file")"
+    printf '%s|%s|%s\n' "$domain" "$cert_file" "$key_file"
+  done
+}
+
+collect_missing_cert_triplets() {
+  local triplets
+  triplets="$(collect_cert_triplets | awk '!seen[$0]++')"
+
+  if [[ -z "$triplets" ]]; then
+    return 0
+  fi
+
+  local domain cert_file key_file
+  while IFS='|' read -r domain cert_file key_file; do
+    [[ -n "$domain" ]] || continue
+
+    if [[ -s "$cert_file" && -s "$key_file" ]]; then
+      continue
+    fi
+
+    printf '%s|%s|%s\n' "$domain" "$cert_file" "$key_file"
+  done <<< "$triplets"
+}
+
 get_static_site_domain() {
   get_effective_static_site_domain
 }

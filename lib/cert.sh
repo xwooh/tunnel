@@ -1,34 +1,12 @@
 #!/usr/bin/env bash
 
 source "${HYPERTUNNEL_ROOT}/lib/common.sh"
+source "${HYPERTUNNEL_ROOT}/lib/env.sh"
 
 acme_bin() {
   local bin_path="${HOME}/.acme.sh/acme.sh"
   [[ -x "$bin_path" ]] || die "未找到 acme.sh: ${bin_path}，请先执行 deps 阶段"
   printf '%s' "$bin_path"
-}
-
-collect_cert_triplets() {
-  if has_effective_static_site; then
-    local static_domain static_cert static_key
-    static_domain="$(get_effective_static_site_domain)"
-    static_cert="$(get_effective_static_site_cert_file)"
-    static_key="$(get_effective_static_site_key_file)"
-
-    printf '%s|%s|%s\n' "$static_domain" "$static_cert" "$static_key"
-  fi
-
-  local trojan_count
-  trojan_count="$(count_ingress_trojan_backends)"
-
-  local i
-  for (( i = 0; i < trojan_count; i++ )); do
-    local domain cert_file key_file
-    domain="$(read_yaml_required ".ingress.trojan_backends[$i].servername" "ingress.trojan_backends[$i].servername")"
-    cert_file="$(read_yaml_required ".ingress.trojan_backends[$i].tls_cert_file" "ingress.trojan_backends[$i].tls_cert_file")"
-    key_file="$(read_yaml_required ".ingress.trojan_backends[$i].tls_key_file" "ingress.trojan_backends[$i].tls_key_file")"
-    printf '%s|%s|%s\n' "$domain" "$cert_file" "$key_file"
-  done
 }
 
 issue_and_install_cert() {
@@ -65,16 +43,17 @@ run_cert_stage() {
 
   require_cmd yq
 
-  local triplets
-  triplets="$(collect_cert_triplets | awk '!seen[$0]++')"
+  local missing_triplets
+  missing_triplets="$(collect_missing_cert_triplets)"
 
-  if [[ -z "$triplets" ]]; then
+  if [[ -z "$missing_triplets" ]]; then
     log_info '当前配置不需要签发证书，跳过证书阶段'
     return 0
   fi
 
-  [[ -n "${CF_Token:-}" ]] || die "缺少 CF_Token"
-  [[ -n "${CF_Zone_ID:-}" ]] || die "缺少 CF_Zone_ID"
+  ensure_required_env_value "CF_Token" "请输入 Cloudflare API Token" "true"
+  ensure_required_env_value "CF_Zone_ID" "请输入 Cloudflare Zone ID" "true"
+  load_env
 
   export CF_Token
   export CF_Zone_ID
@@ -82,7 +61,7 @@ run_cert_stage() {
   while IFS='|' read -r domain cert_file key_file; do
     [[ -n "$domain" ]] || continue
     issue_and_install_cert "$domain" "$cert_file" "$key_file"
-  done <<< "$triplets"
+  done <<< "$missing_triplets"
 
   log_info "证书阶段完成"
 }

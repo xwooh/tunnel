@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 
 source "${HYPERTUNNEL_ROOT}/lib/common.sh"
+source "${HYPERTUNNEL_ROOT}/lib/env.sh"
 
 install_apt_packages() {
   log_info "通过 apt 安装基础依赖"
@@ -95,11 +96,30 @@ install_acme_sh() {
   [[ -x "$acme_bin" ]] || die "安装 acme.sh 失败"
 }
 
+install_acme_sh_if_needed() {
+  local cert_issue="${ENABLE_CERT_ISSUE:-true}"
+  if is_false "$cert_issue"; then
+    log_info "根据 ENABLE_CERT_ISSUE=${cert_issue} 跳过 acme.sh 安装"
+    return 0
+  fi
+
+  local missing_triplets
+  missing_triplets="$(collect_missing_cert_triplets)"
+  if [[ -z "$missing_triplets" ]]; then
+    log_info "当前配置不需要签发证书，跳过 acme.sh 安装"
+    return 0
+  fi
+
+  ensure_required_env_value "ACME_EMAIL" "请输入 acme.sh 注册邮箱" "false"
+  load_env
+  install_acme_sh
+}
+
 install_dependencies() {
   log_info "开始安装依赖"
   install_apt_packages
   install_yq_v4
   install_sing_box
-  install_acme_sh
+  install_acme_sh_if_needed
   log_info "依赖安装完成"
 }

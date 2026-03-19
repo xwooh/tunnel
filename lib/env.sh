@@ -102,11 +102,5 @@ setup_env() {
 
   load_env
 
-  ensure_required_env_value "CF_Token" "请输入 Cloudflare API Token" "true"
-  ensure_required_env_value "CF_Zone_ID" "请输入 Cloudflare Zone ID" "true"
-  ensure_required_env_value "ACME_EMAIL" "请输入 acme.sh 注册邮箱" "false"
-
-  load_env
-
   log_info "环境变量已就绪: ${ENV_FILE}"
 }
