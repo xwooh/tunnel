@@ -46,6 +46,7 @@ cp .env.example .env
 ## 配置说明
 
 - 顶层块分为 `egress`、`ingress`、`sing_box`。哪个块存在，就执行哪个块对应的逻辑；缺失的块会整体跳过，不再要求相关字段。
+- `deps` 阶段只会在存在 `ingress` 时安装 `nginx`。
 - `ingress` 负责 `443 + SNI` 这一套能力，包括 `public_listen`、`unknown_sni_action`、`static_site`、`reality_backends`、`trojan_backends`。
 - `ingress.static_site` 可以省略；省略后会自动选择第一个 `fallback_site.enabled=true` 的 Trojan 后端作为静态站来源，并复用它的 `servername`、`tls_cert_file`、`tls_key_file`。
 - 启用 `fallback_site` 的 Trojan 后端建议显式设置 `fallback_site.web_root`；如果没有 `ingress.static_site`，则这是必填项。

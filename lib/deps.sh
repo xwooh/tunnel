@@ -5,16 +5,26 @@ source "${HYPERTUNNEL_ROOT}/lib/common.sh"
 install_apt_packages() {
   log_info "通过 apt 安装基础依赖"
   export DEBIAN_FRONTEND=noninteractive
-  apt-get update
-  apt-get install -y \
-    ca-certificates \
-    curl \
-    gnupg \
-    jq \
-    lsb-release \
-    nginx \
-    openssl \
+
+  local packages=(
+    ca-certificates
+    curl
+    gnupg
+    jq
+    lsb-release
+    openssl
     sudo
+  )
+
+  if has_ingress; then
+    packages+=(nginx)
+    log_info "检测到 ingress 配置，安装 nginx"
+  else
+    log_info "未配置 ingress，跳过 nginx 安装"
+  fi
+
+  apt-get update
+  apt-get install -y "${packages[@]}"
 }
 
 install_yq_v4() {
