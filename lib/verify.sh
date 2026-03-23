@@ -16,7 +16,7 @@ run_check() {
   fi
 }
 
-resolve_probe_ip() {
+resolve_probe_target() {
   local candidate
   candidate="$(read_yaml_optional '.ingress.reality_backends[0].server' '')"
   if [[ -n "$candidate" && "$candidate" != "null" ]]; then
@@ -34,24 +34,26 @@ resolve_probe_ip() {
 }
 
 check_static_site_http() {
-  local domain public_port probe_ip
+  local domain public_port probe_target
   domain="$(get_effective_static_site_domain)"
   public_port="$(parse_public_port "$(get_ingress_public_listen)")"
-  probe_ip="$(resolve_probe_ip)"
+  probe_target="$(resolve_probe_target)"
 
+  # Keep the original URL host and SNI while steering the TCP connection
+  # to the ingress entrypoint configured for client access.
   curl --silent --show-error --insecure --max-time 20 \
-    --resolve "${domain}:${public_port}:${probe_ip}" \
+    --connect-to "${domain}:${public_port}:${probe_target}:${public_port}" \
     "https://${domain}/" \
     -o /dev/null
 }
 
 check_sni_handshake() {
   local servername="$1"
-  local public_port probe_ip
+  local public_port probe_target
   public_port="$(parse_public_port "$(get_ingress_public_listen)")"
-  probe_ip="$(resolve_probe_ip)"
+  probe_target="$(resolve_probe_target)"
 
-  bash -c "echo | openssl s_client -connect '${probe_ip}:${public_port}' -servername '${servername}' -brief >/dev/null 2>&1"
+  bash -c "echo | openssl s_client -connect '${probe_target}:${public_port}' -servername '${servername}' -brief >/dev/null 2>&1"
 }
 
 check_listener_port() {
