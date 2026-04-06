@@ -20,35 +20,35 @@ ingress:
 
   reality_backends:
     - name: Ra
-      listen_port: 8888
+      listen_port: 39999
       egress: warp
-      user_uuid: aaaaaa-bbbbb-cccccc-ddddd
+      user_uuid:
       server: example.com
       servername: sni1.example.com
       handshake_server: sni1.example.com
       port: 443
-      private_key: private_key_example
-      public_key: public_key_example
-      short_id: aaacccbbbddd
+      private_key:
+      public_key:
+      short_id:
     - name: Rb
-      listen_port: 7777
-      user_uuid: aaaaaa-bbbbb-cccccc-ddddd
+      listen_port: 39998
+      user_uuid:
       server: example.com
       servername: sni2.example.com
       handshake_server: sni2.example.com
       port: 443
-      private_key: private_key_example2
-      public_key: public_key_example2
-      short_id: aaacccbbbddd
+      private_key:
+      public_key:
+      short_id:
 
   trojan_backends:
     - name: T1
-      listen_port: 6666
+      listen_port: 39997
       password: password_example
       server: example.com
-      servername: example.com
-      tls_cert_file: /root/certfile/example.com/fullchain.pem
-      tls_key_file: /root/certfile/example.com/key.pem
+      servername: trojan.example.com
+      tls_cert_file: /root/certfile/trojan.example.com/fullchain.pem
+      tls_key_file: /root/certfile/trojan.example.com/key.pem
       skip_cert_verify: false
       fallback_site:
         enabled: true

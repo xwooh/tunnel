@@ -26,7 +26,7 @@ usage() {
   env            加载 .env，并写入默认开关
   deps           安装 apt 依赖、yq、sing-box，并在需要签证书时安装 acme.sh
   cert           按 sni-routing.yaml 在需要时申请并安装证书
-  render         生成 nginx/sing-box/mihomo/socks 文件到 generated/
+  render         补全缺失的 reality 凭据，并生成 nginx/sing-box/mihomo/socks 文件到 generated/
   deploy         备份系统现有文件并部署生成产物
   service        校验配置并重启服务
   verify         执行连通性与握手验证

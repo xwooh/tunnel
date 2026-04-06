@@ -18,6 +18,100 @@ normalize_bool() {
   die "${where} 必须是布尔值"
 }
 
+yaml_scalar_is_blank() {
+  local expr="$1"
+  local value
+
+  value="$(yq e -r "$expr" "$CONFIG_FILE")"
+  [[ -z "$value" || "$value" == "null" ]]
+}
+
+yaml_short_id_is_blank() {
+  local expr="$1"
+  local raw_json
+
+  raw_json="$(yq e -o=json "$expr" "$CONFIG_FILE")"
+  jq -e '
+    if type == "array" then
+      ([ .[] | tostring | select(length > 0) ] | length) == 0
+    elif . == null then
+      true
+    else
+      (tostring | length) == 0
+    end
+  ' <<< "$raw_json" >/dev/null
+}
+
+generate_reality_keypair() {
+  local output private_key public_key
+
+  output="$(sing-box generate reality-keypair)"
+  private_key="$(awk -F': ' '/^PrivateKey:/ { print $2; exit }' <<< "$output")"
+  public_key="$(awk -F': ' '/^PublicKey:/ { print $2; exit }' <<< "$output")"
+
+  [[ -n "$private_key" ]] || die '无法解析 sing-box generate reality-keypair 输出中的 PrivateKey'
+  [[ -n "$public_key" ]] || die '无法解析 sing-box generate reality-keypair 输出中的 PublicKey'
+
+  printf '%s\t%s' "$private_key" "$public_key"
+}
+
+populate_reality_backend_credentials() {
+  local reality_count
+  reality_count="$(count_ingress_reality_backends)"
+  (( reality_count > 0 )) || return 0
+
+  require_cmd sing-box
+
+  local i
+  for (( i = 0; i < reality_count; i++ )); do
+    local where generated_fields
+    local user_uuid_expr private_key_expr public_key_expr short_id_expr
+    local generated_uuid generated_short_id generated_keypair generated_private_key generated_public_key
+    local missing_keypair missing_short_id
+
+    where="ingress.reality_backends[$i]"
+    user_uuid_expr=".ingress.reality_backends[$i].user_uuid"
+    private_key_expr=".ingress.reality_backends[$i].private_key"
+    public_key_expr=".ingress.reality_backends[$i].public_key"
+    short_id_expr=".ingress.reality_backends[$i].short_id"
+    generated_fields=()
+
+    if yaml_scalar_is_blank "$user_uuid_expr"; then
+      generated_uuid="$(sing-box generate uuid)"
+      [[ -n "$generated_uuid" ]] || die "无法为 ${where}.user_uuid 生成 UUID"
+      USER_UUID="$generated_uuid" yq e -i "${user_uuid_expr} = strenv(USER_UUID)" "$CONFIG_FILE"
+      generated_fields+=('user_uuid')
+    fi
+
+    missing_keypair=0
+    if yaml_scalar_is_blank "$private_key_expr" || yaml_scalar_is_blank "$public_key_expr"; then
+      missing_keypair=1
+    fi
+    if (( missing_keypair )); then
+      generated_keypair="$(generate_reality_keypair)"
+      IFS=$'\t' read -r generated_private_key generated_public_key <<< "$generated_keypair"
+      PRIVATE_KEY="$generated_private_key" PUBLIC_KEY="$generated_public_key" \
+        yq e -i "${private_key_expr} = strenv(PRIVATE_KEY) | ${public_key_expr} = strenv(PUBLIC_KEY)" "$CONFIG_FILE"
+      generated_fields+=('private_key' 'public_key')
+    fi
+
+    missing_short_id=1
+    if ! yaml_short_id_is_blank "$short_id_expr"; then
+      missing_short_id=0
+    fi
+    if (( missing_short_id )); then
+      generated_short_id="$(sing-box generate rand --hex 8)"
+      [[ -n "$generated_short_id" ]] || die "无法为 ${where}.short_id 生成 short_id"
+      SHORT_ID="$generated_short_id" yq e -i "${short_id_expr} = strenv(SHORT_ID)" "$CONFIG_FILE"
+      generated_fields+=('short_id')
+    fi
+
+    if (( ${#generated_fields[@]} > 0 )); then
+      log_info "已补全 ${where}: ${generated_fields[*]}"
+    fi
+  done
+}
+
 build_outbounds_json() {
   local outbounds_json
   outbounds_json="$(jq -n '[
@@ -791,6 +885,7 @@ render_all() {
 
   mkdir -p "$GENERATED_DIR"
 
+  populate_reality_backend_credentials
   validate_unique_bindings
 
   if has_ingress; then

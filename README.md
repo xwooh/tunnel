@@ -56,6 +56,7 @@ cp .env.example .env
 - `sing_box.socks5_backends[*].listen_host` 是可选的，默认 `0.0.0.0`；如果只想本机可访问，可以改成 `127.0.0.1`。
 - backend 的 `egress` 字段是可选的；不填写时默认走内置 `direct`，填写时必须引用顶层 `egress` 中已定义的名字。
 - 顶层 `egress` 现在是命名集合，例如 `egress.warp`。当前支持 `type: socks`，可被 `ingress` 和 `sing_box` 下的 backend 共用。
+- `ingress.reality_backends[*].user_uuid`、`private_key`、`public_key`、`short_id` 可以留空；执行 `render` 时会自动调用 `sing-box` 生成并写回 `config/sni-routing.yaml`。
 
 ## 渲染产物
 
