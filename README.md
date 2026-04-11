@@ -82,7 +82,7 @@ cp .env.example .env
 
 ## 说明
 
-- `ENABLE_WARP_INSTALL=auto` 时，仅在有 backend 引用本地 `egress.warp` 时自动安装 WARP socks。
+- `ENABLE_WARP_INSTALL=auto` 时，仅在有 backend 引用本地 `egress.warp` 时自动安装 WARP 客户端；WARP 服务启动和代理模式配置在 `service` 阶段执行。
 - `nearby` 会根据 `RIFT_VERSION` 生成 `rift-v<RIFT_VERSION>-linux-x86_64-musl` 下载包名，需要在 Linux x86_64 主机上运行。
 - 当 `ingress.unknown_sni_action=fallback_static` 且未配置 `ingress.static_site` 时，未知 SNI 会先转发到第一个启用 `fallback_site` 的 Trojan，再由它回落到对应站点。
 - `sing_box.socks5_backends` 固定使用用户名密码认证，监听独立公网端口。

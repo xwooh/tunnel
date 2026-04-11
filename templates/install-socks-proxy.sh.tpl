@@ -13,14 +13,7 @@ echo "deb [signed-by=/usr/share/keyrings/cloudflare-warp-archive-keyring.gpg] ht
 # 安装客户端
 sudo apt-get update && sudo apt-get install -y cloudflare-warp
 
-# 启动服务并注册账户
-sudo systemctl enable --now warp-svc
-warp-cli --accept-tos registration new
-
-# 设置代理模式并连接
-warp-cli --accept-tos mode proxy
-warp-cli --accept-tos proxy port __SOCKS_PROXY_PORT__
-warp-cli --accept-tos connect
+# Runtime setup is handled in the service stage.
 
 # 可选检查命令
 # warp-cli --accept-tos status
