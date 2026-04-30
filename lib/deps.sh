@@ -17,15 +17,19 @@ install_apt_packages() {
     sudo
   )
 
+  apt-get update
+  apt-get install -y "${packages[@]}"
+}
+
+install_nginx_if_needed() {
+  export DEBIAN_FRONTEND=noninteractive
+
   if has_ingress; then
-    packages+=(nginx)
     log_info "检测到 ingress 配置，安装 nginx"
+    apt-get install -y nginx
   else
     log_info "未配置 ingress，跳过 nginx 安装"
   fi
-
-  apt-get update
-  apt-get install -y "${packages[@]}"
 }
 
 install_yq_v4() {
@@ -119,6 +123,7 @@ install_dependencies() {
   log_info "开始安装依赖"
   install_apt_packages
   install_yq_v4
+  install_nginx_if_needed
   install_sing_box
   install_acme_sh_if_needed
   log_info "依赖安装完成"
