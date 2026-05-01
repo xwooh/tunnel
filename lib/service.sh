@@ -38,6 +38,29 @@ ensure_warp_registration() {
   "$warp_cli_bin" --accept-tos registration new
 }
 
+wait_for_warp_daemon() {
+  local warp_cli_bin="$1"
+  local output=""
+  local attempt
+
+  for (( attempt = 1; attempt <= 20; attempt++ )); do
+    if output="$("$warp_cli_bin" --accept-tos status 2>&1)"; then
+      return 0
+    fi
+
+    if [[ "$output" != *"Unable to connect to the CloudflareWARP daemon"* ]] &&
+      [[ "$output" != *"Maybe the daemon is not running"* ]]; then
+      return 0
+    fi
+
+    sleep 1
+  done
+
+  [[ -z "$output" ]] || printf '%s\n' "$output" >&2
+  systemctl --no-pager --full status warp-svc | sed -n '1,20p' >&2 || true
+  die 'WARP daemon did not become ready after restart'
+}
+
 service_check_configs() {
   if has_sing_box_workload; then
     local sing_box_bin
@@ -74,6 +97,7 @@ service_restart() {
 
     systemctl enable warp-svc
     systemctl restart warp-svc
+    wait_for_warp_daemon "$warp_cli_bin"
     ensure_warp_registration "$warp_cli_bin"
     "$warp_cli_bin" --accept-tos mode proxy
     "$warp_cli_bin" --accept-tos proxy port "$warp_port"
