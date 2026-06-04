@@ -4,7 +4,7 @@ egress:
   warp:
     type: socks
     server: 127.0.0.1
-    port: 39996
+    port: 38886
 
 ingress:
   public_listen: 0.0.0.0:443
@@ -56,6 +56,21 @@ ingress:
         listen_port: 37970
         web_root: /var/www/html
 
+  anytls_backends:
+    - name: A1
+      listen_port: 39996
+      egress: warp
+      password: password_example
+      server: example.com
+      servername: anytls.example.com
+      tls_cert_file: /root/certfile/anytls.example.com/fullchain.pem
+      tls_key_file: /root/certfile/anytls.example.com/key.pem
+      skip_cert_verify: false
+      client_fingerprint: chrome
+      alpn:
+        - h2
+        - http/1.1
+
 sing_box:
   socks5_backends:
     - name: S1
@@ -63,3 +78,23 @@ sing_box:
       server: proxy.example.com
       username: socks_user
       password: socks_password
+
+  hy2_backends:
+    - name: H1
+      listen_host: 0.0.0.0
+      listen_port: 443
+      egress: warp
+      password: password_example
+      server: example.com
+      servername: hy2.example.com
+      tls_cert_file: /root/certfile/hy2.example.com/fullchain.pem
+      tls_key_file: /root/certfile/hy2.example.com/key.pem
+      skip_cert_verify: false
+      masquerade: file:///var/www/html
+      up_mbps: 100
+      down_mbps: 100
+      obfs:
+        type: salamander
+        password: obfs_password_example
+      alpn:
+        - h3

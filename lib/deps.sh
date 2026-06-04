@@ -86,6 +86,46 @@ install_sing_box() {
   command -v sing-box >/dev/null 2>&1 || die "安装 sing-box 失败"
 }
 
+sing_box_version_number() {
+  sing-box version 2>/dev/null | awk '
+    NR == 1 {
+      for (i = 1; i <= NF; i++) {
+        if ($i ~ /^[0-9]+\.[0-9]+\.[0-9]+/) {
+          print $i
+          exit
+        }
+      }
+    }
+  '
+}
+
+version_gte() {
+  local current="$1"
+  local required="$2"
+  [[ "$(printf '%s\n%s\n' "$required" "$current" | sort -V | tail -n 1)" == "$current" ]]
+}
+
+ensure_sing_box_anytls_support_if_needed() {
+  local anytls_count
+  anytls_count="$(count_ingress_anytls_backends)"
+  (( anytls_count > 0 )) || return 0
+
+  local current_version
+  current_version="$(sing_box_version_number)"
+  if [[ -n "$current_version" ]] && version_gte "$current_version" '1.12.0'; then
+    log_info "sing-box 版本支持 AnyTLS: ${current_version}"
+    return 0
+  fi
+
+  log_info "AnyTLS 需要 sing-box 1.12.0+，尝试更新 sing-box"
+  curl -fsSL https://sing-box.app/install.sh | bash
+
+  current_version="$(sing_box_version_number)"
+  [[ -n "$current_version" ]] || die '无法解析 sing-box 版本'
+  version_gte "$current_version" '1.12.0' || die "AnyTLS 需要 sing-box 1.12.0+，当前版本: ${current_version}"
+  log_info "sing-box 版本支持 AnyTLS: ${current_version}"
+}
+
 install_acme_sh() {
   local acme_bin="${HOME}/.acme.sh/acme.sh"
   if [[ -x "$acme_bin" ]]; then
@@ -125,6 +165,7 @@ install_dependencies() {
   install_yq_v4
   install_nginx_if_needed
   install_sing_box
+  ensure_sing_box_anytls_support_if_needed
   install_acme_sh_if_needed
   log_info "依赖安装完成"
 }

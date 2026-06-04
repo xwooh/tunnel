@@ -30,6 +30,12 @@ resolve_probe_target() {
     return 0
   fi
 
+  candidate="$(read_yaml_optional '.ingress.anytls_backends[0].server' '')"
+  if [[ -n "$candidate" && "$candidate" != "null" ]]; then
+    printf '%s' "$candidate"
+    return 0
+  fi
+
   printf '127.0.0.1'
 }
 
@@ -59,6 +65,11 @@ check_sni_handshake() {
 check_listener_port() {
   local port="$1"
   ss -ltn | grep -qE "[:.]${port}[[:space:]]"
+}
+
+check_udp_listener_port() {
+  local port="$1"
+  ss -lun | grep -qE "[:.]${port}[[:space:]]"
 }
 
 check_local_warp_listener_if_needed() {
@@ -95,10 +106,12 @@ run_verify_stage() {
     log_info '跳过静态域名 HTTPS 响应检查：当前未配置静态站'
   fi
 
-  local reality_count trojan_count socks5_count i servername
+  local reality_count trojan_count anytls_count socks5_count hy2_count i servername
   reality_count="$(count_ingress_reality_backends)"
   trojan_count="$(count_ingress_trojan_backends)"
+  anytls_count="$(count_ingress_anytls_backends)"
   socks5_count="$(count_sing_box_socks5_backends)"
+  hy2_count="$(count_sing_box_hy2_backends)"
 
   for (( i = 0; i < reality_count; i++ )); do
     servername="$(read_yaml_required ".ingress.reality_backends[$i].servername" "ingress.reality_backends[$i].servername")"
@@ -110,11 +123,23 @@ run_verify_stage() {
     run_check "Trojan SNI 握手 ${servername}" check_sni_handshake "$servername"
   done
 
+  for (( i = 0; i < anytls_count; i++ )); do
+    servername="$(read_yaml_required ".ingress.anytls_backends[$i].servername" "ingress.anytls_backends[$i].servername")"
+    run_check "AnyTLS SNI 握手 ${servername}" check_sni_handshake "$servername"
+  done
+
   for (( i = 0; i < socks5_count; i++ )); do
     local name listen_port
     name="$(read_yaml_required ".sing_box.socks5_backends[$i].name" "sing_box.socks5_backends[$i].name")"
     listen_port="$(read_yaml_required ".sing_box.socks5_backends[$i].listen_port" "sing_box.socks5_backends[$i].listen_port")"
     run_check "SOCKS5 监听 ${name}" check_socks5_backend_listener "$listen_port"
+  done
+
+  for (( i = 0; i < hy2_count; i++ )); do
+    local name listen_port
+    name="$(read_yaml_required ".sing_box.hy2_backends[$i].name" "sing_box.hy2_backends[$i].name")"
+    listen_port="$(read_yaml_required ".sing_box.hy2_backends[$i].listen_port" "sing_box.hy2_backends[$i].listen_port")"
+    run_check "HY2 UDP 监听 ${name}" check_udp_listener_port "$listen_port"
   done
 
   run_check 'WARP 本地监听检查（使用 egress.warp 时）' check_local_warp_listener_if_needed

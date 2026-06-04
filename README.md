@@ -48,12 +48,18 @@ cp .env.example .env
 - 顶层块分为 `egress`、`ingress`、`sing_box`。哪个块存在，就执行哪个块对应的逻辑；缺失的块会整体跳过，不再要求相关字段。
 - `CF_Token`、`CF_Zone_ID`、`ACME_EMAIL` 只在启用证书签发且当前证书文件缺失时需要提供。
 - `deps` 阶段只会在存在 `ingress` 时安装 `nginx`。
-- `ingress` 负责 `443 + SNI` 这一套能力，包括 `public_listen`、`unknown_sni_action`、`static_site`、`reality_backends`、`trojan_backends`。
+- `ingress` 负责 `443 + SNI` 这一套能力，包括 `public_listen`、`unknown_sni_action`、`static_site`、`reality_backends`、`trojan_backends`、`anytls_backends`。
 - `ingress.static_site` 可以省略；省略后会自动选择第一个 `fallback_site.enabled=true` 的 Trojan 后端作为静态站来源，并复用它的 `servername`、`tls_cert_file`、`tls_key_file`。
 - 启用 `fallback_site` 的 Trojan 后端建议显式设置 `fallback_site.web_root`；如果没有 `ingress.static_site`，则这是必填项。
+- `ingress.anytls_backends` 会生成 sing-box AnyTLS 入站，并复用 nginx stream SNI 分流；AnyTLS 需要真实 TLS 证书，不使用 Reality。
+- `ingress.anytls_backends[*].alpn` 可省略，默认导出 `h2` 和 `http/1.1`；`client_fingerprint` 可省略，默认 `chrome`。
 - `sing_box.socks5_backends` 会直接生成 sing-box 的独立 SOCKS5 监听端口，不复用 `443 + SNI` 分流。
+- `sing_box.hy2_backends` 会直接生成 sing-box Hysteria2/HY2 UDP 入站，不经过 nginx；因此可以与 `ingress.public_listen` 共用同一个数字端口（例如 `443/tcp` 和 `443/udp`）。
 - `sing_box.socks5_backends[*].server` 是导出客户端配置时使用的连接地址，可以填写域名或 IP。
 - `sing_box.socks5_backends[*].listen_host` 是可选的，默认 `0.0.0.0`；如果只想本机可访问，可以改成 `127.0.0.1`。
+- `sing_box.hy2_backends[*].server` 是导出客户端配置时使用的连接地址；`servername` 用于 TLS SNI 和证书签发。
+- `sing_box.hy2_backends[*].masquerade` is optional; it supports URL string values such as `file:///var/www/html` and `https://example.com`, or object values with `type: file/proxy/string`, and is rendered only into the server inbound.
+- `sing_box.hy2_backends[*].up_mbps`、`down_mbps`、`obfs`、`alpn` 可省略；`obfs.type` 当前只支持 `salamander`。
 - backend 的 `egress` 字段是可选的；不填写时默认走内置 `direct`，填写时必须引用顶层 `egress` 中已定义的名字。
 - 顶层 `egress` 现在是命名集合，例如 `egress.warp`。当前支持 `type: socks`，可被 `ingress` 和 `sing_box` 下的 backend 共用。
 - `ingress.reality_backends[*].user_uuid`、`private_key`、`public_key`、`short_id` 可以留空；执行 `render` 时会自动调用 `sing-box` 生成并写回 `config/sni-routing.yaml`。
@@ -63,8 +69,9 @@ cp .env.example .env
 执行 `render` 后会在 `generated/` 下生成：
 
 - `nginx.conf`（仅在存在 `ingress` 时生成）
-- `config.json`（仅在存在 reality/trojan/socks5 backend 时生成）
+- `config.json`（仅在存在 reality/trojan/anytls/socks5/hy2 backend 时生成）
 - `mihomo-client.yaml`
+- `sing-box-client.json`
 - `install-socks-proxy.sh`（仅在存在本地 `egress.warp` 时生成）
 
 ## 备份与回滚
@@ -86,3 +93,4 @@ cp .env.example .env
 - `nearby` 会根据 `RIFT_VERSION` 生成 `rift-v<RIFT_VERSION>-linux-x86_64-musl` 下载包名，需要在 Linux x86_64 主机上运行。
 - 当 `ingress.unknown_sni_action=fallback_static` 且未配置 `ingress.static_site` 时，未知 SNI 会先转发到第一个启用 `fallback_site` 的 Trojan，再由它回落到对应站点。
 - `sing_box.socks5_backends` 固定使用用户名密码认证，监听独立公网端口。
+- `sing_box.hy2_backends` 使用 Hysteria2 协议和 UDP 监听端口，服务商安全组/防火墙需要放行对应 UDP 端口。

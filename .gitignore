@@ -1,5 +1,7 @@
 .env
 config/sni-routing.yaml
+config/sni-routing.*.yaml
+!config/sni-routing.example.yaml
 generated/*
 !generated/.gitkeep
 state/tools/

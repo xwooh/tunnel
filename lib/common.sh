@@ -173,6 +173,15 @@ count_ingress_trojan_backends() {
   yq e '(.ingress.trojan_backends // []) | length' "$CONFIG_FILE"
 }
 
+count_ingress_anytls_backends() {
+  if ! has_ingress; then
+    printf '0'
+    return 0
+  fi
+
+  yq e '(.ingress.anytls_backends // []) | length' "$CONFIG_FILE"
+}
+
 count_sing_box_socks5_backends() {
   if ! has_sing_box; then
     printf '0'
@@ -182,13 +191,24 @@ count_sing_box_socks5_backends() {
   yq e '(.sing_box.socks5_backends // []) | length' "$CONFIG_FILE"
 }
 
+count_sing_box_hy2_backends() {
+  if ! has_sing_box; then
+    printf '0'
+    return 0
+  fi
+
+  yq e '(.sing_box.hy2_backends // []) | length' "$CONFIG_FILE"
+}
+
 has_sing_box_workload() {
-  local reality_count trojan_count socks5_count
+  local reality_count trojan_count anytls_count socks5_count hy2_count
   reality_count="$(count_ingress_reality_backends)"
   trojan_count="$(count_ingress_trojan_backends)"
+  anytls_count="$(count_ingress_anytls_backends)"
   socks5_count="$(count_sing_box_socks5_backends)"
+  hy2_count="$(count_sing_box_hy2_backends)"
 
-  (( reality_count + trojan_count + socks5_count > 0 ))
+  (( reality_count + trojan_count + anytls_count + socks5_count + hy2_count > 0 ))
 }
 
 has_egress() {
@@ -327,6 +347,28 @@ collect_cert_triplets() {
     domain="$(read_yaml_required ".ingress.trojan_backends[$i].servername" "ingress.trojan_backends[$i].servername")"
     cert_file="$(read_yaml_required ".ingress.trojan_backends[$i].tls_cert_file" "ingress.trojan_backends[$i].tls_cert_file")"
     key_file="$(read_yaml_required ".ingress.trojan_backends[$i].tls_key_file" "ingress.trojan_backends[$i].tls_key_file")"
+    printf '%s|%s|%s\n' "$domain" "$cert_file" "$key_file"
+  done
+
+  local anytls_count
+  anytls_count="$(count_ingress_anytls_backends)"
+
+  for (( i = 0; i < anytls_count; i++ )); do
+    local domain cert_file key_file
+    domain="$(read_yaml_required ".ingress.anytls_backends[$i].servername" "ingress.anytls_backends[$i].servername")"
+    cert_file="$(read_yaml_required ".ingress.anytls_backends[$i].tls_cert_file" "ingress.anytls_backends[$i].tls_cert_file")"
+    key_file="$(read_yaml_required ".ingress.anytls_backends[$i].tls_key_file" "ingress.anytls_backends[$i].tls_key_file")"
+    printf '%s|%s|%s\n' "$domain" "$cert_file" "$key_file"
+  done
+
+  local hy2_count
+  hy2_count="$(count_sing_box_hy2_backends)"
+
+  for (( i = 0; i < hy2_count; i++ )); do
+    local domain cert_file key_file
+    domain="$(read_yaml_required ".sing_box.hy2_backends[$i].servername" "sing_box.hy2_backends[$i].servername")"
+    cert_file="$(read_yaml_required ".sing_box.hy2_backends[$i].tls_cert_file" "sing_box.hy2_backends[$i].tls_cert_file")"
+    key_file="$(read_yaml_required ".sing_box.hy2_backends[$i].tls_key_file" "sing_box.hy2_backends[$i].tls_key_file")"
     printf '%s|%s|%s\n' "$domain" "$cert_file" "$key_file"
   done
 }
@@ -483,11 +525,13 @@ get_warp_egress_port() {
 
 backend_uses_named_egress() {
   local target="$1"
-  local reality_count trojan_count socks5_count i egress_name
+  local reality_count trojan_count anytls_count socks5_count hy2_count i egress_name
 
   reality_count="$(count_ingress_reality_backends)"
   trojan_count="$(count_ingress_trojan_backends)"
+  anytls_count="$(count_ingress_anytls_backends)"
   socks5_count="$(count_sing_box_socks5_backends)"
+  hy2_count="$(count_sing_box_hy2_backends)"
 
   for (( i = 0; i < reality_count; i++ )); do
     egress_name="$(resolve_backend_egress_name ".ingress.reality_backends[$i].egress" "ingress.reality_backends[$i].egress")"
@@ -503,8 +547,22 @@ backend_uses_named_egress() {
     fi
   done
 
+  for (( i = 0; i < anytls_count; i++ )); do
+    egress_name="$(resolve_backend_egress_name ".ingress.anytls_backends[$i].egress" "ingress.anytls_backends[$i].egress")"
+    if [[ "$egress_name" == "$target" ]]; then
+      return 0
+    fi
+  done
+
   for (( i = 0; i < socks5_count; i++ )); do
     egress_name="$(resolve_backend_egress_name ".sing_box.socks5_backends[$i].egress" "sing_box.socks5_backends[$i].egress")"
+    if [[ "$egress_name" == "$target" ]]; then
+      return 0
+    fi
+  done
+
+  for (( i = 0; i < hy2_count; i++ )); do
+    egress_name="$(resolve_backend_egress_name ".sing_box.hy2_backends[$i].egress" "sing_box.hy2_backends[$i].egress")"
     if [[ "$egress_name" == "$target" ]]; then
       return 0
     fi
